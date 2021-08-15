@@ -182,7 +182,8 @@ scene("game", () => {
                 direction: VEC_ZERO,
                 lastSideAnim: "runRight",
                 currentAnim: "iddle",
-                isDead: false
+                isDead: false,
+                pushAttempts: 0,
             },
             "man",
             scale(1),
@@ -192,6 +193,11 @@ scene("game", () => {
         obj.hidden = true
 
         return obj
+    }
+
+    // returns an integer random number between min (included) and max (included)
+    function randomInteger(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
 
@@ -241,7 +247,7 @@ scene("game", () => {
             calculateWantedCamPos()
         }
     }
-    
+
     player.action(() => {
         calculateCamPos()
     })
@@ -513,7 +519,15 @@ scene("game", () => {
                 this.currentAnim = "iddle"
                 this.play("iddle")
                 this.direction = getDirectionByKey(exceptDirection)
-            }
+            },
+            canPush() {
+                if (randomInteger(0, 5) > 1 || player.pushAttempts < 2) {
+                    player.pushAttempts++
+                    return false
+                }
+                player.pushAttempts = 0
+                return true
+            },
         }
     }
 
@@ -612,6 +626,11 @@ scene("game", () => {
                 if (nextToStone != null) {
                     return;
                 }
+
+                if (!player.canPush()) {
+                    return
+                }
+
                 var underStone = items[player.position.y + 1][player.position.x - 1]
                 newFallingState = (underStone == null)
                 if (newFallingState) {
@@ -636,6 +655,11 @@ scene("game", () => {
                 if (nextToStone != null) {
                     return;
                 }
+
+                if (!player.canPush()) {
+                    return
+                }
+
                 var underStone = items[player.position.y + 1][player.position.x + 1]
                 newFallingState = (underStone == null)
                 if (newFallingState) {
