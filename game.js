@@ -20,7 +20,7 @@ kaboom({
 })
 
 const SPRITE_WALL = 30
-const SPRITE_MUD = 34
+const SPRITE_MUD = 33
 const SPRITE_SPAWN = 31
 const SPRITE_BICKS = 32
 const SPRITE_STONE = 35
@@ -34,8 +34,10 @@ const DIR_RIGHT = vec2(1, 0)
 const DIR_UP = vec2(0, -1)
 const DIR_DOWN = vec2(0, 1)
 
+const SPRITE_FILENAME = "spritesheet_A.png"
+
 loadRoot('http://localhost:8000/resources/')
-loadSprite('man', 'spritesheet.png', {
+loadSprite('man', SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
@@ -53,7 +55,7 @@ loadSprite('man', 'spritesheet.png', {
         },
     },
 })
-loadSprite('bd', 'spritesheet.png', {
+loadSprite('bd', SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
@@ -63,7 +65,7 @@ loadSprite('bd', 'spritesheet.png', {
         }
     }
 })
-loadSprite('spawn', 'spritesheet.png', {
+loadSprite('spawn', SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
@@ -82,7 +84,7 @@ loadSprite('spawn', 'spritesheet.png', {
     }
 })
 
-loadSprite('diamond', 'spritesheet.png', {
+loadSprite('diamond', SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
@@ -292,6 +294,10 @@ scene("game", () => {
                 this.value++
                 this.text = "score: " + this.value
             },
+            inc(value) {
+                this.value += value
+                this.text = "score: " + this.value
+            },
             set(newValue) {
                 this.value = newValue
                 this.text = "score: " + this.value
@@ -310,11 +316,18 @@ scene("game", () => {
             value: 0,
             set(newValue) {
                 this.value = newValue
-                this.text = "needed: " + this.value
+                this.setText()
+            },
+            dec() {
+                this.value--
+                this.setText()
             },
             setPos(offsetInPoints) {
                 this.pos = offsetInPoints.scale(BLOCK_SIZE).add(vec2(130, 6))
             },
+            setText() {
+                this.text = "needed: " + (this.value < 0 ? 0 : this.value)
+            }
         },
     ])
 
@@ -346,6 +359,7 @@ scene("game", () => {
     scoreLabel.set(0)
     levelLabel.set(1)
     diamondsNeededLabel.set(levelCfg.diamondsNeeded)
+    var exitOpened = false
     //UISetPos(camOffset)
 
 
@@ -512,9 +526,10 @@ scene("game", () => {
         if (diamond.is("diamond")) {
             items[diamond.position.y][diamond.position.x] = null
             destroy(diamond)
-            scoreLabel.inc()
+            scoreLabel.inc(exitOpened ? levelCfg.diamondBonusValue : levelCfg.diamondValue)
+            diamondsNeededLabel.dec()
 
-            if (scoreLabel.value == levelCfg.diamondsNeeded) {
+            if (diamondsNeededLabel.value == 0) {
                 layer("bg").clearColor = rgb(1, 1, 1)
                 layer("bg").color = rgb(1, 1, 1)
                 const bgRect = add([
@@ -525,6 +540,7 @@ scene("game", () => {
                 wait(0.2, () => {
                     destroy(bgRect)
                     exit.play("exitOpened")
+                    exitOpened = true
                 })
             }
         }
