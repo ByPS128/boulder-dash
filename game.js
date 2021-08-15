@@ -9,6 +9,9 @@ const BLOCK_SIZE = 16
 const KABOOM_WIDTH = BOARD_VISIBLE_WIDTH * BLOCK_SIZE
 const KABOOM_HEIGHT = BOARD_VISIBLE_HEIGHT * BLOCK_SIZE
 
+const KABOOM_HALF_WIDTH = KABOOM_WIDTH / 2
+const KABOOM_HALF_HEIGHT = KABOOM_HEIGHT / 2
+
 kaboom({
     global: true,
     width: KABOOM_WIDTH,
@@ -154,7 +157,7 @@ scene("game", () => {
         width: BLOCK_SIZE,
         height: BLOCK_SIZE,
         caveDelay: 15,
-        caveTime: 150, // 0-nekonečno, jinak vteřiny, max 999
+        caveTime: 150, // 0-infinity, othervise seconds, max 999
         diamondsNeeded: 12,
         diamondValue: 10,
         diamondBonusValue: 15,
@@ -192,9 +195,18 @@ scene("game", () => {
     }
 
 
+    // Camera handling
+    // 
+    var camPosCurrent = VEC_ZERO.clone()
+    var camPosWanted = VEC_ZERO.clone()
     var camOffset = VEC_ZERO.clone()
     var player = createPlayer()
-    player.action(() => {
+
+    function calculateWantedCamPos() {
+        camPosWanted = camOffset.add(BOARD_VISIBLE_WIDTH / 2, BOARD_VISIBLE_HEIGHT / 2).scale(BLOCK_SIZE)
+    }
+
+    function calculateCamPos() {
         var oldCamOffset = camOffset.clone()
 
         // X
@@ -224,10 +236,14 @@ scene("game", () => {
         }
 
         // change in camera pos?
+        // if so, calculate new camera pos
         if (!camOffset.eq(oldCamOffset)) {
-            camPos(camOffset.add(BOARD_VISIBLE_WIDTH / 2, BOARD_VISIBLE_HEIGHT / 2).scale(BLOCK_SIZE))
-            UISetPos(camOffset)
+            calculateWantedCamPos()
         }
+    }
+    
+    player.action(() => {
+        calculateCamPos()
     })
 
 
@@ -251,8 +267,6 @@ scene("game", () => {
         }
         if (anim === "born") {
             destroy(spawn)
-            // var newPos = player.position.scale(BLOCK_SIZE)
-            // player.pos = newPos;
             player.hidden = false
             player.animSpeed = 0.3
             player.play("iddle")
@@ -269,7 +283,6 @@ scene("game", () => {
         solid(),
         "exit",
     ])
-    //exit.frame = SPRITE_WALL
 
 
     const uiBackground = add([
@@ -278,15 +291,15 @@ scene("game", () => {
         pos(0, 0),
         layer('ui'),
         {
-            setPos(offsetInPoints) {
-                this.pos = offsetInPoints.scale(BLOCK_SIZE)
+            setPos(currentCamPos) {
+                this.pos = currentCamPos.sub(KABOOM_HALF_WIDTH, KABOOM_HALF_HEIGHT)
             },
         },
     ])
 
     const scoreLabel = add([
         text("score: -", 8),
-        pos(30, 4),
+        pos(30, 6),
         layer('ui'),
         {
             value: 0,
@@ -302,15 +315,15 @@ scene("game", () => {
                 this.value = newValue
                 this.text = "score: " + this.value
             },
-            setPos(offsetInPoints) {
-                this.pos = offsetInPoints.scale(BLOCK_SIZE).add(vec2(30, 6))
+            setPos(currentCamPos) {
+                this.pos = currentCamPos.sub(KABOOM_HALF_WIDTH, KABOOM_HALF_HEIGHT).add(30, 6)
             },
         },
     ])
 
     const diamondsNeededLabel = add([
         text("nedded: -", 8),
-        pos(130, 4),
+        pos(130, 6),
         layer('ui'),
         {
             value: 0,
@@ -322,8 +335,8 @@ scene("game", () => {
                 this.value--
                 this.setText()
             },
-            setPos(offsetInPoints) {
-                this.pos = offsetInPoints.scale(BLOCK_SIZE).add(vec2(130, 6))
+            setPos(currentCamPos) {
+                this.pos = currentCamPos.sub(KABOOM_HALF_WIDTH, KABOOM_HALF_HEIGHT).add(130, 6)
             },
             setText() {
                 this.text = "needed: " + (this.value < 0 ? 0 : this.value)
@@ -333,7 +346,7 @@ scene("game", () => {
 
     const levelLabel = add([
         text("level: -", 8),
-        pos(240, 4),
+        pos(240, 6),
         layer('ui'),
         {
             value: 0,
@@ -341,17 +354,17 @@ scene("game", () => {
                 this.value = newValue
                 this.text = "level: " + this.value
             },
-            setPos(offsetInPoints) {
-                this.pos = offsetInPoints.scale(BLOCK_SIZE).add(vec2(240, 6))
+            setPos(currentCamPos) {
+                this.pos = currentCamPos.sub(KABOOM_HALF_WIDTH, KABOOM_HALF_HEIGHT).add(240, 6)
             },
         }
     ])
 
-    function UISetPos(posInPoints) {
-        uiBackground.setPos(posInPoints)
-        scoreLabel.setPos(posInPoints)
-        diamondsNeededLabel.setPos(posInPoints)
-        levelLabel.setPos(posInPoints)
+    function UISetPos(currentCamPos) {
+        uiBackground.setPos(currentCamPos)
+        scoreLabel.setPos(currentCamPos)
+        diamondsNeededLabel.setPos(currentCamPos)
+        levelLabel.setPos(currentCamPos)
     }
 
     var mapHeight = map.length
@@ -360,7 +373,6 @@ scene("game", () => {
     levelLabel.set(1)
     diamondsNeededLabel.set(levelCfg.diamondsNeeded)
     var exitOpened = false
-    //UISetPos(camOffset)
 
 
     var items = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
@@ -447,14 +459,15 @@ scene("game", () => {
                 player.pos = player.position.scale(BLOCK_SIZE)
                 items[player.position.y][player.position.x] = player
 
+                calculateWantedCamPos()
+                camPosCurrent = camPosWanted
+
                 spawn.position = player.position
                 spawn.pos = player.pos
             } else if (ch === 'E') {
                 exit.position = vec2(x, y)
                 exit.pos = vec2(x, y).scale(BLOCK_SIZE)
                 items[exit.position.y][exit.position.x] = exit
-            } else {
-                //items[y][x] = null
             }
         }
     }
@@ -464,7 +477,7 @@ scene("game", () => {
 
     const gameLevel = addLevel(map, levelCfg)
 
-    var ldt = 0
+    var lastDelta = 0
 
 
     function setupPlayer() {
@@ -500,9 +513,6 @@ scene("game", () => {
                 this.currentAnim = "iddle"
                 this.play("iddle")
                 this.direction = getDirectionByKey(exceptDirection)
-                if (!this.direction.eq(VEC_ZERO)) {
-                    //ldt = 0
-                }
             }
         }
     }
@@ -561,7 +571,7 @@ scene("game", () => {
     }
 
     function movePlayer() {
-        // je hráč iddle?
+        // is player iddle?
         if (player.direction.eq(VEC_ZERO)) {
             if (player.lastSideAnim != "iddle") {
                 player.setIddle("null")
@@ -669,12 +679,7 @@ scene("game", () => {
                         }
                         continue
                     } else {
-                        /*if (under.is("man")) {
-                            if (stone.isFalling) {
-                                //playing = false
-                                //boomPlayer()
-                            }
-                        } else */if (under.is("stone")) {
+                        if (under.is("stone")) {
                             var above = items[stone.position.y - 1][stone.position.x]
                             var isStoneAbove = above != null && above.is("stone")
                             isStoneAbove = false
@@ -805,19 +810,31 @@ scene("game", () => {
     }
 
 
-    // každý frame ...
+    // every frame ...
     action(() => {
-        // nastal čas pro pohyb?
-        if (ldt == 0 || ldt > SPEED) {
+
+        var distance = camPosCurrent.dist(camPosWanted)
+        if (distance != 0) {
+            var diff = camPosWanted.sub(camPosCurrent)
+            camPosCurrent = camPosCurrent.add(diff.scale(dt() * /*speed*/4))
+            if (distance < 1) {
+                camPosCurrent = camPosWanted
+            }
+
+            camPos(camPosCurrent)
+            UISetPos(camPosCurrent)
+        }
+
+        // is it time to move objects?
+        if (lastDelta == 0 || lastDelta > SPEED) {
             movePlayer()
             moveStones()
             markStonesToMove()
             reposObjects()
-            ldt = 0
+            lastDelta = 0
         }
 
-        // delta času mezi 2 frames
-        ldt += dt()
+        lastDelta += dt()
     })
 
     on("animEnd", "explosion", (obj) => {
@@ -833,7 +850,7 @@ scene("game", () => {
             return
         }
         player.direction = DIR_LEFT
-        ldt = 0
+        lastDelta = 0
     })
 
     keyPress("right", () => {
@@ -844,7 +861,7 @@ scene("game", () => {
             return
         }
         player.direction = DIR_RIGHT
-        ldt = 0
+        lastDelta = 0
     })
 
     keyPress("up", () => {
@@ -855,7 +872,7 @@ scene("game", () => {
             return
         }
         player.direction = DIR_UP
-        ldt = 0
+        lastDelta = 0
     })
 
     keyPress("down", () => {
@@ -866,7 +883,7 @@ scene("game", () => {
             return
         }
         player.direction = DIR_DOWN
-        ldt = 0
+        lastDelta = 0
     })
 
 
