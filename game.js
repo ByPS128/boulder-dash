@@ -206,7 +206,9 @@ scene("game", () => {
     var camPosCurrent = VEC_ZERO.clone()
     var camPosWanted = VEC_ZERO.clone()
     var camOffset = VEC_ZERO.clone()
+    
     var player = createPlayer()
+    var lastKeyDown = "null2"
 
     function calculateWantedCamPos() {
         camPosWanted = camOffset.add(BOARD_VISIBLE_WIDTH / 2, BOARD_VISIBLE_HEIGHT / 2).scale(BLOCK_SIZE)
@@ -514,11 +516,10 @@ scene("game", () => {
                 items[this.lastPosition.y][this.lastPosition.x] = null
                 items[this.position.y][this.position.x] = this
             },
-            setIddle(exceptDirection) {
+            setIddle() {
                 this.animSpeed = 0.2
                 this.currentAnim = "iddle"
                 this.play("iddle")
-                this.direction = getDirectionByKey(exceptDirection)
             },
             canPush() {
                 if (randomInteger(0, 5) > 1 || player.pushAttempts < 2) {
@@ -570,28 +571,46 @@ scene("game", () => {
         }
     }
 
-    function getDirectionByKey(exceptDirection) {
-        if (keyIsDown("left") && exceptDirection != "left") {
-            return DIR_LEFT
-        } else if (keyIsDown("right") && exceptDirection != "right") {
-            return DIR_RIGHT
-        } else if (keyIsDown("up") && exceptDirection != "up") {
-            return DIR_UP
-        } else if (keyIsDown("down") && exceptDirection != "down") {
-            return DIR_DOWN
+    function getDirectionByKey() {
+        if (!keyIsDown(lastKeyDown)) {
+            if (keyIsDown("left")) {
+                lastKeyDown = "left"
+            } else if (keyIsDown("right")) {
+                lastKeyDown = "right"
+            } else if (keyIsDown("up")) {
+                lastKeyDown = "up"
+            } else if (keyIsDown("down")) {
+                lastKeyDown = "down"
+            } else {
+                lastKeyDown = "null2"
+            }
         }
 
-        return VEC_ZERO
+        return keyToDirection(lastKeyDown)
+    }
+
+    function keyToDirection(key) {
+        if (key == "left") {
+            return DIR_LEFT
+        } else if (key == "right") {
+            return DIR_RIGHT
+        } else if (key == "up") {
+            return DIR_UP
+        } else if (key == "down") {
+            return DIR_DOWN
+        } else {
+            return VEC_ZERO
+        }
     }
 
     function movePlayer() {
         // is player iddle?
         if (player.direction.eq(VEC_ZERO)) {
             if (player.lastSideAnim != "iddle") {
-                player.setIddle("null")
+                player.setIddle()
             }
-            return
 
+            return
         }
 
         player.playAnimByDirection()
@@ -836,8 +855,9 @@ scene("game", () => {
 
     // every frame ...
     action(() => {
-
-        player.direction = getDirectionByKey()
+        if (playing) {
+            player.direction = getDirectionByKey()
+        }
 
         // camera movement
         var distance = camPosCurrent.dist(camPosWanted)
