@@ -485,7 +485,7 @@ scene("game", () => {
 
     const gameLevel = addLevel(map, levelCfg)
 
-    var lastDelta = 0
+    var cumulatedDelta = 0
 
 
     function setupPlayer() {
@@ -873,15 +873,15 @@ scene("game", () => {
         }
 
         // is it time to move objects?
-        if (lastDelta == 0 || lastDelta > SPEED) {
+        if (cumulatedDelta > SPEED) {
             movePlayer()
             moveStones()
             markStonesToMove()
             reposObjects()
-            lastDelta = 0
+            cumulatedDelta = 0
         }
 
-        lastDelta += dt()
+        cumulatedDelta += dt()
     })
 
     on("animEnd", "explosion", (obj) => {
