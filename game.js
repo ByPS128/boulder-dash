@@ -837,6 +837,9 @@ scene("game", () => {
     // every frame ...
     action(() => {
 
+        player.direction = getDirectionByKey()
+
+        // camera movement
         var distance = camPosCurrent.dist(camPosWanted)
         if (distance != 0) {
             var diff = camPosWanted.sub(camPosCurrent)
@@ -864,64 +867,6 @@ scene("game", () => {
     on("animEnd", "explosion", (obj) => {
         items[obj.position.y][obj.position.x] = null
         destroy(obj)
-    })
-
-    keyPress("left", () => {
-        if (!playing) {
-            return
-        }
-        if (!player.direction.eq(VEC_ZERO) && !player.direction.eq(DIR_LEFT)) {
-            return
-        }
-        player.direction = DIR_LEFT
-        lastDelta = 0
-    })
-
-    keyPress("right", () => {
-        if (!playing) {
-            return
-        }
-        if (!player.direction.eq(VEC_ZERO) && !player.direction.eq(DIR_RIGHT)) {
-            return
-        }
-        player.direction = DIR_RIGHT
-        lastDelta = 0
-    })
-
-    keyPress("up", () => {
-        if (!playing) {
-            return
-        }
-        if (!player.direction.eq(VEC_ZERO) && !player.direction.eq(DIR_UP)) {
-            return
-        }
-        player.direction = DIR_UP
-        lastDelta = 0
-    })
-
-    keyPress("down", () => {
-        if (!playing) {
-            return
-        }
-        if (!player.direction.eq(VEC_ZERO) && !player.direction.eq(DIR_DOWN)) {
-            return
-        }
-        player.direction = DIR_DOWN
-        lastDelta = 0
-    })
-
-
-    keyRelease("left", () => {
-        player.setIddle("left")
-    })
-    keyRelease("right", () => {
-        player.setIddle("right")
-    })
-    keyRelease("up", () => {
-        player.setIddle("up")
-    })
-    keyRelease("down", () => {
-        player.setIddle("down")
     })
 })
 
