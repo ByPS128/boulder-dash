@@ -28,6 +28,7 @@ const SPRITE_SPAWN = 31
 const SPRITE_BICKS = 32
 const SPRITE_STONE = 35
 const SPRITE_DIAMOND = 40
+const SPRITE_FIREFLY = 80
 
 const SPEED = 0.2
 
@@ -36,6 +37,25 @@ const DIR_LEFT = vec2(-1, 0)
 const DIR_RIGHT = vec2(1, 0)
 const DIR_UP = vec2(0, -1)
 const DIR_DOWN = vec2(0, 1)
+
+const STR_LEFT = "left"
+const STR_RIGHT = "right"
+const STR_UP = "up"
+const STR_DOWN = "down"
+
+const FIREFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_DOWN, DIR_RIGHT, DIR_UP]
+
+var NEXT_DIRECTION_TO_LEFT = []
+NEXT_DIRECTION_TO_LEFT[STR_LEFT] = DIR_DOWN
+NEXT_DIRECTION_TO_LEFT[STR_DOWN] = DIR_RIGHT
+NEXT_DIRECTION_TO_LEFT[STR_RIGHT] = DIR_UP
+NEXT_DIRECTION_TO_LEFT[STR_UP] = DIR_LEFT
+
+var NEXT_DIRECTION_TO_RIGHT = []
+NEXT_DIRECTION_TO_RIGHT[STR_LEFT] = DIR_UP
+NEXT_DIRECTION_TO_RIGHT[STR_UP] = DIR_RIGHT
+NEXT_DIRECTION_TO_RIGHT[STR_RIGHT] = DIR_DOWN
+NEXT_DIRECTION_TO_RIGHT[STR_DOWN] = DIR_LEFT
 
 const SPRITE_FILENAME = "spritesheet_A.png"
 
@@ -65,6 +85,10 @@ loadSprite('bd', SPRITE_FILENAME, {
         explosion: {
             from: 100,
             to: 102,
+        },
+        firefly: {
+            from: 80,
+            to: 83,
         }
     }
 })
@@ -98,60 +122,100 @@ loadSprite('diamond', SPRITE_FILENAME, {
     }
 })
 
+function directionVecToStr(vector) {
+    if (vector.eq(DIR_LEFT)) {
+        return STR_LEFT
+    } else if (vector.eq(DIR_RIGHT)) {
+        return STR_RIGHT
+    } else if (vector.eq(DIR_UP)) {
+        return STR_UP
+    } else if (vector.eq(DIR_DOWN)) {
+        return STR_DOWN
+    }
+}
+
+function directionStrToVec(direction) {
+    if (direction == STR_LEFT) {
+        return DIR_LEFT
+    } else if (direction == STR_RIGHT) {
+        return DIR_RIGHT
+    } else if (direction == STR_UP) {
+        return DIR_UP
+    } else if (direction == STR_DOWN) {
+        return DIR_DOWN
+    }
+}
+
 scene("game", () => {
     layers(['bg', 'obj', 'ui'], 'obj')
-    var sa = 0
+    var initialized = false
     var playing = false
 
-    // Cave Debug
+    // // Cave Debug
     // const map = [
-    //     '                                   ',
-    //     '                                   ',
-    //     '                                   ',
-    //     '===================================',
-    //     '=.................*****+*.........=',
-    //     '=..* * ...........*******.........=',
-    //     '=..... .....*.... *******S.++..E..=',
-    //     '=......*.*..*.... ===+=== ........=',
-    //     '=................         ........=',
-    //     '=.........****...         ........=',
-    //     '=....************         ........=',
-    //     '=................         ........=',
-    //     '=....                     ........=',
-    //     '=................         ........=',
-    //     '=.................................=',
-    //     '=.................................=',
-    //     '=.................................=',
-    //     '=.................................=',
-    //     '===================================',
+    //     '                                        ',
+    //     '========================================',
+    //     '=.................*****+*..............=',
+    //     '=..* * ...........*******..............=',
+    //     '=..... .....*.... *******S.++..E.......=',
+    //     '=......*.*..*.... ===+=== .............=',
+    //     '=................    .    ..  .   . O .=',
+    //     '=.........****...         ..  . . . . .=',
+    //     '=....************    O    ..  . O .   .=',
+    //     '=................    .    ..O .........=',
+    //     '=....                     .............=',
+    //     '=................         . O .........=',
+    //     '=......................................=',
+    //     '=......................................=',
+    //     '=......................................=',
+    //     '=......................................=',
+    //     '========================================',
     // ]
 
-    // Cave A. Intro
+    // Firefly demo cave
     const map = [
         '                                        ',
         '========================================',
-        '=...... ..+.* .....*.*....... ....*....=',
-        '=.*S*...... .........*+..*.... ..... ..=',
-        '=.......... ..*.....*.*..*........*....=',
-        '=*.**.........*......*..*....*...*.....=',
-        '=*. *......... *..*........*......*.**.=',
-        '=... ..*........*.....*. *........*.**.=',
-        '=------------------------------...*..*.=',
-        '=. ...*..+. ..*.*..........+.*+...... .=',
-        '=..+.....*..... ........** *..*....*...=',
-        '=...*..*.*..............* .*..*........=',
-        '=.*.....*........***.......*.. .+....*.=',
-        '=.+.. ..*.  .....*.*+..+....*...*..+. .=',
-        '=. *..............* *..*........+.....*=',
-        '=........------------------------------=',
-        '= *.........*...+....*.....*...*.......=',
-        '= *......... *..*........*......*.**..E=',
-        '=. ..*........*.....*.  ....+...*.**...=',
-        '=....*+..*........*......*.*+......*...=',
-        '=... ..*. ..*.**.........*.*+...... ..*=',
-        '=.+.... ..... ......... .*..*........*.=',
-        '========================================',
+        '=ES....................................=',
+        '=......................................=',
+        '=   . O .   .   .     .................=',
+        '= . . . . .O.O. .  O  .................=',
+        '= O .   .   .   .     .................=',
+        '=......................................=',
+        '=..O       O.O.........................=',
+        '=. .......... .........................=',
+        '=. .O      O.  O.......................=',
+        '=.P.......... .........................=',
+        '=============O==========================',
+        '            ===                         ',
     ]
+
+    // // Cave A. Intro
+    // const map = [
+    //     '                                        ',
+    //     '========================================',
+    //     '=...... ..+.* .....*.*....... ....*....=',
+    //     '=.*S*...... .........*+..*.... ..... ..=',
+    //     '=.......... ..*.....*.*..*........*....=',
+    //     '=*.**.........*......*..*....*...*.....=',
+    //     '=*. *......... *..*........*......*.**.=',
+    //     '=... ..*........*.....*. *........*.**.=',
+    //     '=------------------------------...*..*.=',
+    //     '=. ...*..+. ..*.*..........+.*+...... .=',
+    //     '=..+.....*..... ........** *..*....*...=',
+    //     '=...*..*.*..............* .*..*........=',
+    //     '=.*.....*........***.......*.. .+....*.=',
+    //     '=.+.. ..*.  .....*.*+..+....*...*..+. .=',
+    //     '=. *..............* *..*........+.....*=',
+    //     '=........------------------------------=',
+    //     '= *.........*...+....*.....*...*.......=',
+    //     '= *......... *..*........*......*.**..E=',
+    //     '=. ..*........*.....*.  ....+...*.**...=',
+    //     '=....*+..*........*......*.*+......*...=',
+    //     '=... ..*. ..*.**.........*.*+...... ..*=',
+    //     '=.+.... ..... ......... .*..*........*.=',
+    //     '========================================',
+    // ]
 
     const levelCfg = {
         width: BLOCK_SIZE,
@@ -206,7 +270,7 @@ scene("game", () => {
     var camPosCurrent = VEC_ZERO.clone()
     var camPosWanted = VEC_ZERO.clone()
     var camOffset = VEC_ZERO.clone()
-    
+
     var player = createPlayer()
     var lastKeyDown = "null2"
 
@@ -383,6 +447,7 @@ scene("game", () => {
     var exitOpened = false
 
 
+    var ff = 0
     var items = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
     var stonesInMove = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
     for (var y = 0; y < mapHeight; y++) {
@@ -397,6 +462,7 @@ scene("game", () => {
                     objSprite,
                     solid(),
                     "stone",
+                    "moveable",
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -414,6 +480,7 @@ scene("game", () => {
                     solid(),
                     "stone",
                     "diamond",
+                    "moveable",
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -424,6 +491,24 @@ scene("game", () => {
                     }
                 ])
                 obj.play('diamond')
+                items[y][x] = obj
+            } else if (ch === 'O') {
+                var objSprite = sprite('bd', { frame: SPRITE_FIREFLY, animSpeed: 0.1 }, solid(), "firefly")
+                var obj = add([
+                    //text("f" + ff++, 4),
+                    objSprite,
+                    solid(),
+                    "firefly",
+                    "enemy",
+                    "moveable",
+                    pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
+                    {
+                        position: vec2(x, y),
+                        direction: DIR_LEFT,
+                        moveProcessed: false,
+                    }
+                ])
+                obj.play('firefly')
                 items[y][x] = obj
             } else if (ch === '.') {
                 var objSprite = sprite('bd', { frame: SPRITE_MUD }, solid(), "mud")
@@ -763,19 +848,71 @@ scene("game", () => {
         }
     }
 
-    function moveStones() {
+    function initFireflies() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var stone = items[y][x]
+                if (stone == null || !stone.is("firefly")) {
+                    continue
+                }
+
+                for (var i = 0; i < 4; i++) {
+                    var nextTo = items[stone.position.y + FIREFLY_INIT_DIRECTIONS[i].y][stone.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
+                    if (nextTo == null) {
+                        stone.direction = FIREFLY_INIT_DIRECTIONS[i]
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    function markFirefliesToMove() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var stone = items[y][x]
+                if (stone == null || !stone.is("firefly")) {
+                    continue
+                }
+
+                var direction = stone.direction
+                var directionStr = directionVecToStr(direction)
+                var nextDirection = NEXT_DIRECTION_TO_LEFT[directionStr]
+                var nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
+                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                    stone.direction = nextDirection
+                    continue
+                }
+                direction = nextDirection
+
+                for (var i = 0; i < 4; i++) {
+                    directionStr = directionVecToStr(direction)
+                    nextDirection = NEXT_DIRECTION_TO_RIGHT[directionStr]
+                    nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
+                    if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                        stone.direction = nextDirection
+                        break
+                    }
+                    direction = nextDirection
+                }
+            }
+        }
+    }
+
+    function resetMovingFlags() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 stonesInMove[y][x] = null
                 var obj = items[y][x]
-                if (obj == null) {
+                if (obj == null || (obj != null && !obj.is("moveable"))) {
                     continue
                 }
-                if (obj.is("stone")) {
-                    obj.moveProcessed = false
-                }
+                obj.moveProcessed = false
             }
         }
+    }
+
+    function moveStones() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 var stone = items[y][x]
@@ -797,6 +934,58 @@ scene("game", () => {
                         playerBoom()
                     }
                 }
+            }
+        }
+    }
+
+    function moveFirefly() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var stone = items[y][x]
+                if (stone == null || !stone.is("firefly")) {
+                    continue
+                }
+                if (stone.moveProcessed) {
+                    continue
+                }
+                if (stone.direction.eq(VEC_ZERO)) {
+                    continue
+                }
+
+                var stonePos = stone.position.clone()
+
+                var newPosition = stone.position.add(stone.direction)
+                crossingObj = items[newPosition.y][newPosition.x]
+                if (crossingObj != null) {
+                    if (crossingObj.moveProcessed) {
+                        continue
+                    }
+                }
+
+                stone.position = stone.position.add(stone.direction)
+                stone.pos = stone.position.scale(BLOCK_SIZE)
+
+                stone.moveProcessed = true
+
+                items[stonePos.y][stonePos.x] = null
+                items[stone.position.y][stone.position.x] = stone
+
+                if (crossingObj != null) {
+                    crossingObj.position = crossingObj.position.add(crossingObj.direction)
+                    crossingObj.pos = crossingObj.position.scale(BLOCK_SIZE)
+                    items[crossingObj.position.y][crossingObj.position.x] = crossingObj
+                    crossingObj.moveProcessed = true
+                }
+            }
+        }
+    }
+
+    function detectFlyableCollisions() {
+        for (var i = 0; i < 4; i++) {
+            var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
+            if (nextTo != null && nextTo.is("moveable")) {
+                playerBoom()
+                break
             }
         }
     }
@@ -853,8 +1042,18 @@ scene("game", () => {
     }
 
 
+    initFireflies()
+    markStonesToMove()
+    markFirefliesToMove()
+
+    initialized = true
+
     // every frame ...
     action(() => {
+        if (!initialized) {
+            return
+        }
+
         if (playing) {
             player.direction = getDirectionByKey()
         }
@@ -874,9 +1073,17 @@ scene("game", () => {
 
         // is it time to move objects?
         if (cumulatedDelta > SPEED) {
+            resetMovingFlags()
             movePlayer()
             moveStones()
+            moveFirefly()
+
+            if (playing) {
+                detectFlyableCollisions()
+            }
+
             markStonesToMove()
+            markFirefliesToMove()
             reposObjects()
             cumulatedDelta = 0
         }
