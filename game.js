@@ -31,7 +31,7 @@ const SPRITE_DIAMOND = 40
 const SPRITE_FIREFLY = 80
 const SPRITE_BUTTERFLY = 90
 
-const SPEED = 0.2
+const SPEED = 0.4
 
 const VEC_ZERO = vec2(0, 0)
 const DIR_LEFT = vec2(-1, 0)
@@ -46,6 +46,12 @@ const STR_DOWN = "down"
 
 const FIREFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_DOWN, DIR_RIGHT, DIR_UP]
 const BUTTERFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_UP, DIR_RIGHT, DIR_DOWN]
+
+var CURRENT_DIRECTION = [];
+CURRENT_DIRECTION[STR_LEFT] = DIR_LEFT
+CURRENT_DIRECTION[STR_DOWN] = DIR_DOWN
+CURRENT_DIRECTION[STR_RIGHT] = DIR_RIGHT
+CURRENT_DIRECTION[STR_UP] = DIR_UP
 
 var NEXT_DIRECTION_TO_LEFT = []
 NEXT_DIRECTION_TO_LEFT[STR_LEFT] = DIR_DOWN
@@ -184,15 +190,15 @@ scene("game", () => {
         '========================================',
         '=E......................S..............=',
         '=.........................*..*....*....=',
-        '=   . O .   .   .     ..O.O............=',
-        '= . . . . .O.O. .  O  .... ............=',
-        '= O .   .   .   .     .... ............=',
-        '=.....................* O *............=',
-        '=..O       O.O...   ...***.............=',
+        '=   . P .   .   .     ....O............=',
+        '= . . . . .P.P. .  P  ..O. ............=',
+        '= P .   .   .   .     .... ............=',
+        '=.....................* P *............=',
+        '=..P       P.P...   ...***.............=',
         '=. .......... ...   ...................=',
-        '=. .O      O.  O. X ...................=',
-        '=.O.......... .........................=',
-        '=============O==========================',
+        '=. .P      P.  P. X ...................=',
+        '=.P.......... .........................=',
+        '=============P==========================',
         '            ===                         ',
     ]
 
@@ -510,6 +516,7 @@ scene("game", () => {
                         position: vec2(x, y),
                         direction: VEC_ZERO,
                         moveProcessed: false,
+                        mustWait: false,
                     }
                 ])
                 obj.play('firefly')
@@ -527,6 +534,7 @@ scene("game", () => {
                         position: vec2(x, y),
                         direction: VEC_ZERO,
                         moveProcessed: false,
+                        mustWait: false,
                     }
                 ])
                 obj.play('butterfly')
@@ -809,6 +817,135 @@ scene("game", () => {
         }
     }
 
+    function initFireflies() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is("firefly")) {
+                    continue
+                }
+
+                var firefly = obj
+                firefly.direction = getFirstAvailableFireflyDirection(firefly)
+            }
+        }
+    }
+
+    function getFirstAvailableFireflyDirection(firefly) {
+        for (var i = 0; i < 4; i++) {
+            var nextTo = items[firefly.position.y + FIREFLY_INIT_DIRECTIONS[i].y][firefly.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
+            if (nextTo == null) {
+                return FIREFLY_INIT_DIRECTIONS[i]
+            }
+        }
+        return VEC_ZERO
+    }
+
+    function markFirefliesToMove() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is("firefly")) {
+                    continue
+                }
+
+                var firefly = obj
+                firefly.mustWait = false
+
+                // Trapped or paused firefly?
+                if (firefly.direction.eq(VEC_ZERO)) {
+                    firefly.direction = getFirstAvailableFireflyDirection(firefly)
+                    // Still trapped? (can be released by near explsion(s) or by released or moved stone(s))
+                    if (firefly.direction.eq(VEC_ZERO)) {
+                        continue
+                    }
+                }
+
+                // Firefly can navigate by following the left side (clockwise)
+                var directionStr = directionVecToStr(firefly.direction)
+                var nextDirection = NEXT_DIRECTION_TO_LEFT[directionStr]
+                var nextObj = items[firefly.position.y + nextDirection.y][firefly.position.x + nextDirection.x]
+                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                    // Turning left is free way
+                    firefly.direction = nextDirection
+                    continue
+                }
+
+                // Can continue stright?
+                var nextDirection = CURRENT_DIRECTION[directionStr]
+                var nextObj = items[firefly.position.y + nextDirection.y][firefly.position.x + nextDirection.x]
+                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                    // Contonue stringht, there is free way
+                    firefly.direction = nextDirection
+                    continue
+                }
+
+                var directionStr = directionVecToStr(firefly.direction)
+                firefly.direction = NEXT_DIRECTION_TO_RIGHT[directionStr]
+
+                // Firefly can stop for a brief moment if there is no Empty Space to the left side before resuming navigation
+                firefly.mustWait = true
+                continue;
+            }
+        }
+    }
+
+    function moveFirefly() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is("firefly")) {
+                    continue
+                }
+
+                var firefly = obj
+                if (firefly.moveProcessed || firefly.mustWait || firefly.direction.eq(VEC_ZERO)) {
+                    continue
+                }
+
+                var fireflyPositionClone = firefly.position.clone()
+
+                var newPosition = firefly.position.add(firefly.direction)
+                // Does some stone plan to fall to there?
+                if (stonesInMove[newPosition.y][newPosition.x] != null) {
+                    // skip step.
+                    continue
+                }
+
+                var crossingObj = items[newPosition.y][newPosition.x]
+                if (crossingObj != null && crossingObj.is("firefly") && crossingObj.moveProcessed) {
+                    continue
+                }
+
+                firefly.position = firefly.position.add(firefly.direction)
+                firefly.pos = firefly.position.scale(BLOCK_SIZE)
+
+                firefly.moveProcessed = true
+
+                items[fireflyPositionClone.y][fireflyPositionClone.x] = null
+                items[firefly.position.y][firefly.position.x] = firefly
+
+                if (crossingObj != null) {
+                    crossingObj.position = crossingObj.position.add(crossingObj.direction)
+                    crossingObj.pos = crossingObj.position.scale(BLOCK_SIZE)
+                    items[crossingObj.position.y][crossingObj.position.x] = crossingObj
+                    crossingObj.moveProcessed = true
+                }
+            }
+        }
+    }
+
+    function detectFlyableCollisions() {
+        // Is player touching something dangerous?
+        for (var i = 0; i < 4; i++) {
+            var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
+            if (nextTo != null && nextTo.is("enemy")) {
+                playerBoom()
+                break
+            }
+        }
+    }
+
     function markStonesToMove() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
@@ -869,82 +1006,6 @@ scene("game", () => {
         }
     }
 
-    function initFireflies() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                var stone = items[y][x]
-                if (stone == null || !stone.is("firefly")) {
-                    continue
-                }
-
-                for (var i = 0; i < 4; i++) {
-                    var nextTo = items[stone.position.y + FIREFLY_INIT_DIRECTIONS[i].y][stone.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
-                    if (nextTo == null) {
-                        stone.direction = FIREFLY_INIT_DIRECTIONS[i]
-                        break
-                    }
-                }
-            }
-        }
-    }
-
-    function markFirefliesToMove() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                var stone = items[y][x]
-                if (stone == null || !stone.is("firefly")) {
-                    continue
-                }
-
-                var direction = stone.direction
-                if (direction.eq(VEC_ZERO)) {
-                    continue
-                }
-
-                var directionStr = directionVecToStr(direction)
-                var nextDirection = NEXT_DIRECTION_TO_LEFT[directionStr]
-                if (stonesInMove[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x] != null)
-                {
-                    //continue
-                }
-                var nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
-                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
-                    stone.direction = nextDirection
-                    continue
-                }
-                direction = nextDirection
-
-                for (var i = 0; i < 4; i++) {
-                    directionStr = directionVecToStr(direction)
-                    nextDirection = NEXT_DIRECTION_TO_RIGHT[directionStr]
-                    if (stonesInMove[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x] != null)
-                    {
-                        //continue
-                    }
-                    nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
-                    if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
-                        stone.direction = nextDirection
-                        break
-                    }
-                    direction = nextDirection
-                }
-            }
-        }
-    }
-
-    function resetMovingFlags() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                stonesInMove[y][x] = null
-                var obj = items[y][x]
-                if (obj == null || (obj != null && !obj.is("moveable"))) {
-                    continue
-                }
-                obj.moveProcessed = false
-            }
-        }
-    }
-
     function moveStones() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
@@ -990,63 +1051,6 @@ scene("game", () => {
         destroy(obj)
     }
 
-    function moveFirefly() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                var stone = items[y][x]
-                if (stone == null || !stone.is("firefly")) {
-                    continue
-                }
-                if (stone.moveProcessed) {
-                    continue
-                }
-                if (stone.direction.eq(VEC_ZERO)) {
-                    continue
-                }
-
-                var stonePos = stone.position.clone()
-
-                var newPosition = stone.position.add(stone.direction)
-                // Does some stone plan to fall to there?
-                if (stonesInMove[newPosition.y][newPosition.x] != null) {
-                    // skip step.
-                    continue
-                }
-
-                var crossingObj = items[newPosition.y][newPosition.x]
-                if (crossingObj != null && crossingObj.is("firefly") && crossingObj.moveProcessed) {
-                    continue
-                }
-
-                stone.position = stone.position.add(stone.direction)
-                stone.pos = stone.position.scale(BLOCK_SIZE)
-
-                stone.moveProcessed = true
-
-                items[stonePos.y][stonePos.x] = null
-                items[stone.position.y][stone.position.x] = stone
-
-                if (crossingObj != null) {
-                    crossingObj.position = crossingObj.position.add(crossingObj.direction)
-                    crossingObj.pos = crossingObj.position.scale(BLOCK_SIZE)
-                    items[crossingObj.position.y][crossingObj.position.x] = crossingObj
-                    crossingObj.moveProcessed = true
-                }
-            }
-        }
-    }
-
-    function detectFlyableCollisions() {
-        // Is player touching something dangerous?
-        for (var i = 0; i < 4; i++) {
-            var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
-            if (nextTo != null && nextTo.is("enemy")) {
-                playerBoom()
-                break
-            }
-        }
-    }
-
     function playerBoom() {
         playing = false
         var position = player.position
@@ -1084,8 +1088,20 @@ scene("game", () => {
         }
     }
 
+    function resetMovingFlags() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                stonesInMove[y][x] = null
+                var obj = items[y][x]
+                if (obj == null || (obj != null && !obj.is("moveable"))) {
+                    continue
+                }
+                obj.moveProcessed = false
+            }
+        }
+    }
+
     function reposObjects() {
-        //return
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 var obj = items[y][x]
