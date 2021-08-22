@@ -22,15 +22,6 @@ kaboom({
     clearColor: [0, 0, 0, 1],
 })
 
-const SPRITE_WALL = 30
-const SPRITE_MUD = 33
-const SPRITE_SPAWN = 31
-const SPRITE_BICKS = 32
-const SPRITE_STONE = 35
-const SPRITE_DIAMOND = 40
-const SPRITE_FIREFLY = 80
-const SPRITE_BUTTERFLY = 90
-
 const SPEED = 0.4
 
 const VEC_ZERO = vec2(0, 0)
@@ -43,6 +34,8 @@ const STR_LEFT = "left"
 const STR_RIGHT = "right"
 const STR_UP = "up"
 const STR_DOWN = "down"
+
+const SPRITES_BOULDER_DASH = "bd"
 
 const FIREFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_DOWN, DIR_RIGHT, DIR_UP]
 const BUTTERFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_UP, DIR_RIGHT, DIR_DOWN]
@@ -65,69 +58,93 @@ NEXT_DIRECTION_TO_RIGHT[STR_UP] = DIR_RIGHT
 NEXT_DIRECTION_TO_RIGHT[STR_RIGHT] = DIR_DOWN
 NEXT_DIRECTION_TO_RIGHT[STR_DOWN] = DIR_LEFT
 
+// Character tags
+const ROCKFORD_TAG = "rockford"
+const FIREFLY_TAG = "firefly"
+const BUTTERFLY_TAG = "butterfly"
+
+// Item/sprite tags
+const DIRT_TAG = "dirt"
+const BOULDER_TAG = "boulder"
+const DIAMOND_TAG = "diamond"
+const WALL_TAG = "wall"
+const TITANIUM_WALL_TAG = "titan"
+const MAGIC_WALL_TAG = "magicWall"
+const AMOEBA_TAG = "amoeba"
+const EXIT_TAG = "exit"
+const SPAWN_TAG = "spawn"
+const EXPLOSION_TAG = "explosion"
+
+// Role name tags
+const ENEMY_ROLE_TAG = "enemy"
+const MOVEABLE_ROLE_TAG = "moveable"
+
+
 const SPRITE_FILENAME = "spritesheet_A.png"
 
+const TITAN_WALL_FRAME = 30
+const DIRT_FRAME = 33
+const SPAWN_FRAME = 31
+const BICKS_WALL_FRAME = 32
+const BOULDER_FRAME = 35
+const DIAMOND_FRAME = 40
+const FIREFLY_FRAME = 80
+const BUTTERFLY_FRAME = 90
+const EXPLOSION_FRAME = 100
+
+const FIREFLY_ANIMATION = "firefly_anim"
+const BUTTERFLY_ANIMATION = "butterfly_anim"
+const DIAMOND_ANIMATION = "diamond_anim"
+const EXPLOSION_ANIMATION = "explosion_anim"
+const IDDLE_ANIMATION = "iddle_anim"
+const RUN_LEFT_ANIMATION = "runLeft_anim"
+const RUN_RIGHT_ANIMATION = "runRight_anim"
+const BORN_ANIMATION = "born_anim"
+const SPAWN_ANIMATION = "spawn_anim"
+const EXIT_OPENED_ANIMATION = "exitOpened_anim"
+
 loadRoot('http://localhost:8000/resources/')
-loadSprite('man', SPRITE_FILENAME, {
+loadSprite(SPRITES_BOULDER_DASH, SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
-        iddle: {
+        iddle_anim: {
             from: 0,
             to: 6,
         },
-        runLeft: {
+        runLeft_anim: {
             from: 10,
             to: 16,
         },
-        runRight: {
+        runRight_anim: {
             from: 20,
             to: 26,
         },
-    },
-})
-loadSprite('bd', SPRITE_FILENAME, {
-    sliceX: 10,
-    sliceY: 13,
-    anims: {
-        explosion: {
-            from: 100,
-            to: 102,
-        },
-        firefly: {
-            from: 80,
-            to: 83,
-        },
-        butterfly: {
-            from: 90,
-            to: 93,
-        },
-    }
-})
-loadSprite('spawn', SPRITE_FILENAME, {
-    sliceX: 10,
-    sliceY: 13,
-    anims: {
-        born: {
+        born_anim: {
             from: 100,
             to: 104,
         },
-        start: {
-            from: SPRITE_WALL,
-            to: SPRITE_SPAWN,
+        spawn_anim: {
+            from: TITAN_WALL_FRAME,
+            to: SPAWN_FRAME,
         },
-        exitOpened: {
-            from: SPRITE_WALL,
-            to: SPRITE_SPAWN,
+        exitOpened_anim: {
+            from: TITAN_WALL_FRAME,
+            to: SPAWN_FRAME,
         },
-    }
-})
-
-loadSprite('diamond', SPRITE_FILENAME, {
-    sliceX: 10,
-    sliceY: 13,
-    anims: {
-        diamond: {
+        explosion_anim: {
+            from: 100,
+            to: 102,
+        },
+        firefly_anim: {
+            from: 80,
+            to: 83,
+        },
+        butterfly_anim: {
+            from: 90,
+            to: 93,
+        },
+        diamond_anim: {
             from: 40,
             to: 47,
         }
@@ -147,15 +164,7 @@ function directionVecToStr(vector) {
 }
 
 function directionStrToVec(direction) {
-    if (direction == STR_LEFT) {
-        return DIR_LEFT
-    } else if (direction == STR_RIGHT) {
-        return DIR_RIGHT
-    } else if (direction == STR_UP) {
-        return DIR_UP
-    } else if (direction == STR_DOWN) {
-        return DIR_DOWN
-    }
+    return CURRENT_DIRECTION[direction]
 }
 
 scene("game", () => {
@@ -184,50 +193,50 @@ scene("game", () => {
     //     '========================================',
     // ]
 
-    // Firefly demo cave
-    const map = [
-        '                                        ',
-        '========================================',
-        '=E......................S..............=',
-        '=.........................*..*....*....=',
-        '=   . P .   .   .     ....O............=',
-        '= . . . . .P.P. .  P  ..O. ............=',
-        '= P .   .   .   .     .... ............=',
-        '=.....................* P *............=',
-        '=..P       P.P...   ...***.............=',
-        '=. .......... ...   ...................=',
-        '=. .P      P.  P. X ...................=',
-        '=.P.......... .........................=',
-        '=============P==========================',
-        '            ===                         ',
-    ]
-
-    // // Cave A. Intro
+    // // Firefly demo cave
     // const map = [
     //     '                                        ',
     //     '========================================',
-    //     '=...... ..+.* .....*.*....... ....*....=',
-    //     '=.*S*...... .........*+..*.... ..... ..=',
-    //     '=.......... ..*.....*.*..*........*....=',
-    //     '=*.**.........*......*..*....*...*.....=',
-    //     '=*. *......... *..*........*......*.**.=',
-    //     '=... ..*........*.....*. *........*.**.=',
-    //     '=------------------------------...*..*.=',
-    //     '=. ...*..+. ..*.*..........+.*+...... .=',
-    //     '=..+.....*..... ........** *..*....*...=',
-    //     '=...*..*.*..............* .*..*........=',
-    //     '=.*.....*........***.......*.. .+....*.=',
-    //     '=.+.. ..*.  .....*.*+..+....*...*..+. .=',
-    //     '=. *..............* *..*........+.....*=',
-    //     '=........------------------------------=',
-    //     '= *.........*...+....*.....*...*.......=',
-    //     '= *......... *..*........*......*.**..E=',
-    //     '=. ..*........*.....*.  ....+...*.**...=',
-    //     '=....*+..*........*......*.*+......*...=',
-    //     '=... ..*. ..*.**.........*.*+...... ..*=',
-    //     '=.+.... ..... ......... .*..*........*.=',
-    //     '========================================',
+    //     '=E......................S..............=',
+    //     '=.........................*..*....*....=',
+    //     '=   . P .   .   .     ....O............=',
+    //     '= . . . . .P.P. .  P  ..O. ............=',
+    //     '= P .   .   .   .     .... ............=',
+    //     '=.....................* O *............=',
+    //     '=..P       P.P...   ...***.............=',
+    //     '=. .......... ...   ...................=',
+    //     '=. .P      P.  P. X ...................=',
+    //     '=.P.......... .........................=',
+    //     '=============P==========================',
+    //     '            ===                         ',
     // ]
+
+    // Cave A. Intro
+    const map = [
+        '                                        ',
+        '========================================',
+        '=...... ..+.* .....*.*....... ....*....=',
+        '=.*S*...... .........*+..*.... ..... ..=',
+        '=.......... ..*.....*.*..*........*....=',
+        '=*.**.........*......*..*....*...*.....=',
+        '=*. *......... *..*........*......*.**.=',
+        '=... ..*........*.....*. *........*.**.=',
+        '=------------------------------...*..*.=',
+        '=. ...*..+. ..*.*..........+.*+...... .=',
+        '=..+.....*..... ........** *..*....*...=',
+        '=...*..*.*..............* .*..*........=',
+        '=.*.....*........***.......*.. .+....*.=',
+        '=.+.. ..*.  .....*.*+..+....*...*..+. .=',
+        '=. *..............* *..*........+.....*=',
+        '=........------------------------------=',
+        '= *.........*...+....*.....*...*.......=',
+        '= *......... *..*........*......*.**..E=',
+        '=. ..*........*.....*.  ....+...*.**...=',
+        '=....*+..*........*......*.*+......*...=',
+        '=... ..*. ..*.**.........*.*+...... ..*=',
+        '=.+.... ..... ......... .*..*........*.=',
+        '========================================',
+    ]
 
     const levelCfg = {
         width: BLOCK_SIZE,
@@ -240,8 +249,6 @@ scene("game", () => {
         slimePermeability: 0,
         AmoebaTimeOfGrowth: 0,
         MagicWallMillingTime: 0,
-        //'=': [sprite('bd', { frame: SPRITE_WALL }, solid()), "wall"],
-        //'.': [sprite('bd', { frame: SPRITE_MUD }, solid()), "mud"],
         any(ch) {
             return []
         }
@@ -249,19 +256,19 @@ scene("game", () => {
 
     function createPlayer() {
         var obj = add([
-            sprite("man", {
-                animSpeed: 0.3, // time per frame (defaults to 0.1)
-                frame: 0, // start frame (defaults to 0)
+            sprite(SPRITES_BOULDER_DASH, {
+                animSpeed: 0.3,
+                frame: 0,
             }),
             {
                 position: VEC_ZERO,
                 direction: VEC_ZERO,
-                lastSideAnim: "runRight",
-                currentAnim: "iddle",
+                lastSideAnim: RUN_RIGHT_ANIMATION,
+                currentAnim: IDDLE_ANIMATION,
                 isDead: false,
                 pushAttempts: 0,
             },
-            "man",
+            ROCKFORD_TAG,
             scale(1),
             setupPlayer(),
         ])
@@ -332,40 +339,40 @@ scene("game", () => {
 
 
     const spawn = add([
-        sprite("spawn", {
+        sprite(SPRITES_BOULDER_DASH, {
             animSpeed: 0.1,
-            frame: SPRITE_SPAWN,
+            frame: SPAWN_FRAME,
         }),
         {
             spawnAnimated: 0,
         },
     ])
     spawn.on("animEnd", (anim) => {
-        if (anim === "start") {
+        if (anim === SPAWN_ANIMATION) {
             spawn.spawnAnimated++
             if (spawn.spawnAnimated == 5) {
-                spawn.play("born", false)
+                spawn.play(BORN_ANIMATION, false)
             } else {
-                spawn.play("start", false)
+                spawn.play(SPAWN_ANIMATION, false)
             }
         }
-        if (anim === "born") {
+        if (anim === BORN_ANIMATION) {
             destroy(spawn)
             player.hidden = false
             player.animSpeed = 0.3
-            player.play("iddle")
+            player.play(IDDLE_ANIMATION)
             playing = true
         }
     });
 
 
     const exit = add([
-        sprite("spawn", {
+        sprite(SPRITES_BOULDER_DASH, {
             animSpeed: 0.2,
-            frame: SPRITE_WALL,
+            frame: TITAN_WALL_FRAME,
         }),
         solid(),
-        "exit",
+        EXIT_TAG,
     ])
 
 
@@ -468,12 +475,12 @@ scene("game", () => {
 
             var ch = row[x]
             if (ch === '*') {
-                var objSprite = sprite('bd', { frame: SPRITE_STONE }, solid(), "stone")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: BOULDER_FRAME })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "stone",
-                    "moveable",
+                    BOULDER_TAG,
+                    MOVEABLE_ROLE_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -485,13 +492,13 @@ scene("game", () => {
                 ])
                 items[y][x] = obj
             } else if (ch === '+') {
-                var objSprite = sprite('diamond', { frame: SPRITE_DIAMOND, animSpeed: 0.05 }, solid(), "diamond")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: DIAMOND_FRAME, animSpeed: 0.05 })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "stone",
-                    "diamond",
-                    "moveable",
+                    BOULDER_TAG,
+                    DIAMOND_TAG,
+                    MOVEABLE_ROLE_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -501,16 +508,16 @@ scene("game", () => {
                         moveProcessed: false,
                     }
                 ])
-                obj.play('diamond')
+                obj.play(DIAMOND_ANIMATION)
                 items[y][x] = obj
             } else if (ch === 'O') {
-                var objSprite = sprite('bd', { frame: SPRITE_FIREFLY, animSpeed: 0.1 }, solid(), "firefly")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: FIREFLY_FRAME, animSpeed: 0.1 })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "firefly",
-                    "moveable",
-                    "enemy",
+                    FIREFLY_TAG,
+                    MOVEABLE_ROLE_TAG,
+                    ENEMY_ROLE_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -519,16 +526,16 @@ scene("game", () => {
                         mustWait: false,
                     }
                 ])
-                obj.play('firefly')
+                obj.play(FIREFLY_ANIMATION)
                 items[y][x] = obj
             } else if (ch === 'X') {
-                var objSprite = sprite('bd', { frame: SPRITE_BUTTERFLY, animSpeed: 0.1 }, solid(), "butterfly")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: BUTTERFLY_FRAME, animSpeed: 0.1 })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "butterfly",
-                    "moveable",
-                    "enemy",
+                    BUTTERFLY_TAG,
+                    MOVEABLE_ROLE_TAG,
+                    ENEMY_ROLE_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -537,14 +544,14 @@ scene("game", () => {
                         mustWait: false,
                     }
                 ])
-                obj.play('butterfly')
+                obj.play(BUTTERFLY_ANIMATION)
                 items[y][x] = obj
             } else if (ch === '.') {
-                var objSprite = sprite('bd', { frame: SPRITE_MUD }, solid(), "mud")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: DIRT_FRAME })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "mud",
+                    DIRT_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -552,11 +559,11 @@ scene("game", () => {
                 ])
                 items[y][x] = obj
             } else if (ch === '=') {
-                var objSprite = sprite('bd', { frame: SPRITE_WALL }, solid(), "wall")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: TITAN_WALL_FRAME })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "wall",
+                    TITANIUM_WALL_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -564,12 +571,11 @@ scene("game", () => {
                 ])
                 items[y][x] = obj
             } else if (ch === '-') {
-                var objSprite = sprite('bd', { frame: SPRITE_BICKS }, solid(), "bricks")
+                var objSprite = sprite(SPRITES_BOULDER_DASH, { frame: BICKS_WALL_FRAME })
                 var obj = add([
                     objSprite,
                     solid(),
-                    "wall",
-                    "bricks",
+                    WALL_TAG,
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
@@ -595,7 +601,7 @@ scene("game", () => {
     }
 
 
-    spawn.play("start", false)
+    spawn.play(SPAWN_ANIMATION, false)
 
     const gameLevel = addLevel(map, levelCfg)
 
@@ -606,9 +612,9 @@ scene("game", () => {
         return {
             playAnimByDirection() {
                 if (player.direction.eq(DIR_LEFT)) {
-                    player.playAnimIfIsDifferent("runLeft")
+                    player.playAnimIfIsDifferent(RUN_LEFT_ANIMATION)
                 } else if (player.direction.eq(DIR_RIGHT)) {
-                    player.playAnimIfIsDifferent("runRight")
+                    player.playAnimIfIsDifferent(RUN_RIGHT_ANIMATION)
                 } else if (player.direction.eq(DIR_UP) || player.direction.eq(DIR_DOWN)) {
                     player.animSpeed = 0.05
                     player.play(player.lastSideAnim)
@@ -632,8 +638,8 @@ scene("game", () => {
             },
             setIddle() {
                 this.animSpeed = 0.2
-                this.currentAnim = "iddle"
-                this.play("iddle")
+                this.currentAnim = IDDLE_ANIMATION
+                this.play(IDDLE_ANIMATION)
             },
             canPush() {
                 if (randomInteger(0, 5) > 1 || player.pushAttempts < 2) {
@@ -651,7 +657,7 @@ scene("game", () => {
         if (mud == null) {
             return
         }
-        if (mud.is("mud")) {
+        if (mud.is(DIRT_TAG)) {
             items[mud.position.y][mud.position.x] = null
             destroy(mud)
         }
@@ -662,7 +668,7 @@ scene("game", () => {
         if (diamond == null) {
             return
         }
-        if (diamond.is("diamond")) {
+        if (diamond.is(DIAMOND_TAG)) {
             items[diamond.position.y][diamond.position.x] = null
             destroy(diamond)
             scoreLabel.inc(exitOpened ? levelCfg.diamondBonusValue : levelCfg.diamondValue)
@@ -678,7 +684,7 @@ scene("game", () => {
                 ]);
                 wait(0.2, () => {
                     destroy(bgRect)
-                    exit.play("exitOpened")
+                    exit.play(EXIT_OPENED_ANIMATION)
                     exitOpened = true
                 })
             }
@@ -720,7 +726,7 @@ scene("game", () => {
     function movePlayer() {
         // is player iddle?
         if (player.direction.eq(VEC_ZERO)) {
-            if (player.lastSideAnim != "iddle") {
+            if (player.lastSideAnim != IDDLE_ANIMATION) {
                 player.setIddle()
             }
 
@@ -730,7 +736,7 @@ scene("game", () => {
         player.playAnimByDirection()
         var directedPosition = player.position.add(player.direction)
         var obj = items[directedPosition.y][directedPosition.x]
-        if (obj != null && obj.is("exit")) {
+        if (obj != null && obj.is(EXIT_TAG)) {
             destroy(obj)
             player.move()
             playing = false
@@ -738,11 +744,11 @@ scene("game", () => {
                 score: scoreLabel.value,
                 level: levelLabel.value,
             })
-        } else if (obj != null && obj.is("diamond")) {
+        } else if (obj != null && obj.is(DIAMOND_TAG)) {
             removeDiamond(player.position.add(player.direction))
             player.move()
             return
-        } else if (obj != null && obj.is("mud")) {
+        } else if (obj != null && obj.is(DIRT_TAG)) {
             removeMud(player.position.add(player.direction))
             player.move()
             return
@@ -754,7 +760,7 @@ scene("game", () => {
 
         if (player.direction.eq(DIR_LEFT)) {
             var stone = obj
-            if (stone != null && stone.is("stone")) {
+            if (stone != null && stone.is(BOULDER_TAG)) {
                 var nextToStone = items[player.position.y][player.position.x - 2]
                 if (nextToStone != null) {
                     return;
@@ -783,7 +789,7 @@ scene("game", () => {
 
         } else if (player.direction.eq(DIR_RIGHT)) {
             var stone = obj
-            if (stone != null && stone.is("stone")) {
+            if (stone != null && stone.is(BOULDER_TAG)) {
                 var nextToStone = items[player.position.y][player.position.x + 2]
                 if (nextToStone != null) {
                     return;
@@ -811,7 +817,7 @@ scene("game", () => {
             }
 
         } else if (player.direction.eq(DIR_UP) || player.direction.eq(DIR_DOWN)) {
-            if (obj != null && obj.is("stone")) {
+            if (obj != null && obj.is(BOULDER_TAG)) {
                 return;
             }
         }
@@ -821,7 +827,7 @@ scene("game", () => {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 var obj = items[y][x]
-                if (obj == null || !obj.is("firefly")) {
+                if (obj == null || !obj.is(FIREFLY_TAG)) {
                     continue
                 }
 
@@ -845,7 +851,7 @@ scene("game", () => {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 var obj = items[y][x]
-                if (obj == null || !obj.is("firefly")) {
+                if (obj == null || !obj.is(FIREFLY_TAG)) {
                     continue
                 }
 
@@ -865,7 +871,7 @@ scene("game", () => {
                 var directionStr = directionVecToStr(firefly.direction)
                 var nextDirection = NEXT_DIRECTION_TO_LEFT[directionStr]
                 var nextObj = items[firefly.position.y + nextDirection.y][firefly.position.x + nextDirection.x]
-                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                if (nextObj == null || (nextObj != null && nextObj.is(FIREFLY_TAG))) {
                     // Turning left is free way
                     firefly.direction = nextDirection
                     continue
@@ -874,7 +880,7 @@ scene("game", () => {
                 // Can continue stright?
                 var nextDirection = CURRENT_DIRECTION[directionStr]
                 var nextObj = items[firefly.position.y + nextDirection.y][firefly.position.x + nextDirection.x]
-                if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
+                if (nextObj == null || (nextObj != null && nextObj.is(FIREFLY_TAG))) {
                     // Contonue stringht, there is free way
                     firefly.direction = nextDirection
                     continue
@@ -894,7 +900,7 @@ scene("game", () => {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
                 var obj = items[y][x]
-                if (obj == null || !obj.is("firefly")) {
+                if (obj == null || !obj.is(FIREFLY_TAG)) {
                     continue
                 }
 
@@ -913,7 +919,7 @@ scene("game", () => {
                 }
 
                 var crossingObj = items[newPosition.y][newPosition.x]
-                if (crossingObj != null && crossingObj.is("firefly") && crossingObj.moveProcessed) {
+                if (crossingObj != null && crossingObj.is(FIREFLY_TAG) && crossingObj.moveProcessed) {
                     continue
                 }
 
@@ -939,7 +945,7 @@ scene("game", () => {
         // Is player touching something dangerous?
         for (var i = 0; i < 4; i++) {
             var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
-            if (nextTo != null && nextTo.is("enemy")) {
+            if (nextTo != null && nextTo.is(ENEMY_ROLE_TAG)) {
                 playerBoom()
                 break
             }
@@ -953,9 +959,9 @@ scene("game", () => {
                 if (stone == null) {
                     continue
                 }
-                if (stone.is("stone")) {
+                if (stone.is(BOULDER_TAG)) {
                     var under = items[stone.position.y + 1][stone.position.x]
-                    if (under == null || (under != null && (under.is("man") || under.is("enemy")) && stone.isFalling)) {
+                    if (under == null || (under != null && (under.is(ROCKFORD_TAG) || under.is(ENEMY_ROLE_TAG)) && stone.isFalling)) {
                         var isTargetreserved = stonesInMove[stone.position.y + 1][stone.position.x] != null
                         if (!isTargetreserved) {
                             stone.isFalling = true
@@ -965,33 +971,33 @@ scene("game", () => {
                         }
                         continue
                     } else {
-                        if (under.is("stone")) {
+                        if (under.is(BOULDER_TAG)) {
                             var above = items[stone.position.y - 1][stone.position.x]
-                            var isStoneAbove = above != null && above.is("stone")
+                            var isStoneAbove = above != null && above.is(BOULDER_TAG)
                             isStoneAbove = false
 
                             var aboveLeft = items[stone.position.y - 1][stone.position.x - 1]
-                            var isStoneAboveLeft = aboveLeft != null && aboveLeft.is("stone")
+                            var isStoneAboveLeft = aboveLeft != null && aboveLeft.is(BOULDER_TAG)
                             var underLeft = items[stone.position.y + 1][stone.position.x - 1]
                             var nextToLeft = items[stone.position.y][stone.position.x - 1]
                             var isTargetreserved = stonesInMove[stone.position.y][stone.position.x - 1] != null
                             if (!isStoneAbove && !isStoneAboveLeft && nextToLeft == null && underLeft == null && stone.fallScenario == null && !isTargetreserved) {
                                 stone.isFalling = true
                                 stone.direction = DIR_LEFT
-                                stone.fallScenario = "left"
+                                stone.fallScenario = "set"
                                 stonesInMove[stone.position.y][stone.position.x - 1] = stone
                                 continue
                             }
 
                             var aboveRight = items[stone.position.y - 1][stone.position.x + 1]
-                            var isStoneAboveRight = aboveRight != null && aboveRight.is("stone")
+                            var isStoneAboveRight = aboveRight != null && aboveRight.is(BOULDER_TAG)
                             var underRight = items[stone.position.y + 1][stone.position.x + 1]
                             var nextToRight = items[stone.position.y][stone.position.x + 1]
                             var isTargetreserved = stonesInMove[stone.position.y][stone.position.x + 1] != null
                             if (!isStoneAbove && !isStoneAboveRight && nextToRight == null && underRight == null && stone.fallScenario == null && !isTargetreserved) {
                                 stone.isFalling = true
                                 stone.direction = DIR_RIGHT
-                                stone.fallScenario = "right"
+                                stone.fallScenario = "set"
                                 stonesInMove[stone.position.y][stone.position.x + 1] = stone
                                 continue
                             }
@@ -1013,7 +1019,7 @@ scene("game", () => {
                 if (stone == null) {
                     continue
                 }
-                if (stone.is("stone") && stone.isFalling && !stone.moveProcessed) {
+                if (stone.is(BOULDER_TAG) && stone.isFalling && !stone.moveProcessed) {
                     stone.moveProcessed = true
                     var stonePos = stone.position.clone()
 
@@ -1035,9 +1041,9 @@ scene("game", () => {
             return
         }
 
-        if (obj.is("man")) {
+        if (obj.is(ROCKFORD_TAG)) {
             playerBoom()
-        } else if (obj.is("firefly")) {
+        } else if (obj.is(FIREFLY_TAG)) {
             boomObject(obj)
         }
     }
@@ -1066,24 +1072,24 @@ scene("game", () => {
             for (var y = position.y - 1; y < position.y + 2; y++) {
                 var obj = items[y][x]
                 if (obj != null) {
-                    if (obj.is("wall")) {
+                    if (obj.is(TITANIUM_WALL_TAG) || obj.is(EXIT_TAG)) {
                         continue
                     }
 
                     destroy(obj)
                 }
 
-                var explosion = add([
-                    sprite('bd', { frame: 100 }, solid(), "explosion"),
+                var explosionObj = add([
+                    sprite(SPRITES_BOULDER_DASH, { frame: EXPLOSION_FRAME }),
                     solid(),
-                    "explosion",
+                    EXPLOSION_TAG,
                     {
                         position: vec2(x, y)
                     }
                 ])
-                items[y][x] = explosion
-                explosion.pos = explosion.position.scale(BLOCK_SIZE)
-                explosion.play("explosion", false)
+                items[y][x] = explosionObj
+                explosionObj.pos = explosionObj.position.scale(BLOCK_SIZE)
+                explosionObj.play(EXPLOSION_ANIMATION, false)
             }
         }
     }
@@ -1093,7 +1099,7 @@ scene("game", () => {
             for (var x = 0; x < mapWidth; x++) {
                 stonesInMove[y][x] = null
                 var obj = items[y][x]
-                if (obj == null || (obj != null && !obj.is("moveable"))) {
+                if (obj == null || (obj != null && !obj.is(MOVEABLE_ROLE_TAG))) {
                     continue
                 }
                 obj.moveProcessed = false
@@ -1164,7 +1170,7 @@ scene("game", () => {
         cumulatedDelta += dt()
     })
 
-    on("animEnd", "explosion", (obj) => {
+    on("animEnd", EXPLOSION_ANIMATION, (obj) => {
         items[obj.position.y][obj.position.x] = null
         destroy(obj)
     })
