@@ -1,8 +1,8 @@
 const BOARD_WIDTH = 40
 const BOARD_HEIGHT = 24
 
-const BOARD_VISIBLE_WIDTH = 20
-const BOARD_VISIBLE_HEIGHT = 13
+const BOARD_VISIBLE_WIDTH = 28//20
+const BOARD_VISIBLE_HEIGHT = 16//13
 
 const BLOCK_SIZE = 16
 
@@ -29,6 +29,7 @@ const SPRITE_BICKS = 32
 const SPRITE_STONE = 35
 const SPRITE_DIAMOND = 40
 const SPRITE_FIREFLY = 80
+const SPRITE_BUTTERFLY = 90
 
 const SPEED = 0.2
 
@@ -44,6 +45,7 @@ const STR_UP = "up"
 const STR_DOWN = "down"
 
 const FIREFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_DOWN, DIR_RIGHT, DIR_UP]
+const BUTTERFLY_INIT_DIRECTIONS = [DIR_LEFT, DIR_UP, DIR_RIGHT, DIR_DOWN]
 
 var NEXT_DIRECTION_TO_LEFT = []
 NEXT_DIRECTION_TO_LEFT[STR_LEFT] = DIR_DOWN
@@ -89,7 +91,11 @@ loadSprite('bd', SPRITE_FILENAME, {
         firefly: {
             from: 80,
             to: 83,
-        }
+        },
+        butterfly: {
+            from: 90,
+            to: 93,
+        },
     }
 })
 loadSprite('spawn', SPRITE_FILENAME, {
@@ -176,16 +182,16 @@ scene("game", () => {
     const map = [
         '                                        ',
         '========================================',
-        '=ES....................................=',
-        '=......................................=',
-        '=   . O .   .   .     .................=',
-        '= . . . . .O.O. .  O  .................=',
-        '= O .   .   .   .     .................=',
-        '=......................................=',
-        '=..O       O.O.........................=',
-        '=. .......... .........................=',
-        '=. .O      O.  O.......................=',
-        '=.P.......... .........................=',
+        '=E......................S..............=',
+        '=.........................*..*....*....=',
+        '=   . O .   .   .     ..O.O............=',
+        '= . . . . .O.O. .  O  .... ............=',
+        '= O .   .   .   .     .... ............=',
+        '=.....................* O *............=',
+        '=..O       O.O...   ...***.............=',
+        '=. .......... ...   ...................=',
+        '=. .O      O.  O. X ...................=',
+        '=.O.......... .........................=',
         '=============O==========================',
         '            ===                         ',
     ]
@@ -447,7 +453,6 @@ scene("game", () => {
     var exitOpened = false
 
 
-    var ff = 0
     var items = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
     var stonesInMove = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
     for (var y = 0; y < mapHeight; y++) {
@@ -495,20 +500,36 @@ scene("game", () => {
             } else if (ch === 'O') {
                 var objSprite = sprite('bd', { frame: SPRITE_FIREFLY, animSpeed: 0.1 }, solid(), "firefly")
                 var obj = add([
-                    //text("f" + ff++, 4),
                     objSprite,
                     solid(),
                     "firefly",
-                    "enemy",
                     "moveable",
+                    "enemy",
                     pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
                     {
                         position: vec2(x, y),
-                        direction: DIR_LEFT,
+                        direction: VEC_ZERO,
                         moveProcessed: false,
                     }
                 ])
                 obj.play('firefly')
+                items[y][x] = obj
+            } else if (ch === 'X') {
+                var objSprite = sprite('bd', { frame: SPRITE_BUTTERFLY, animSpeed: 0.1 }, solid(), "butterfly")
+                var obj = add([
+                    objSprite,
+                    solid(),
+                    "butterfly",
+                    "moveable",
+                    "enemy",
+                    pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
+                    {
+                        position: vec2(x, y),
+                        direction: VEC_ZERO,
+                        moveProcessed: false,
+                    }
+                ])
+                obj.play('butterfly')
                 items[y][x] = obj
             } else if (ch === '.') {
                 var objSprite = sprite('bd', { frame: SPRITE_MUD }, solid(), "mud")
@@ -797,7 +818,7 @@ scene("game", () => {
                 }
                 if (stone.is("stone")) {
                     var under = items[stone.position.y + 1][stone.position.x]
-                    if (under == null || (under != null && under.is("man") && stone.isFalling)) {
+                    if (under == null || (under != null && (under.is("man") || under.is("enemy")) && stone.isFalling)) {
                         var isTargetreserved = stonesInMove[stone.position.y + 1][stone.position.x] != null
                         if (!isTargetreserved) {
                             stone.isFalling = true
@@ -876,8 +897,16 @@ scene("game", () => {
                 }
 
                 var direction = stone.direction
+                if (direction.eq(VEC_ZERO)) {
+                    continue
+                }
+
                 var directionStr = directionVecToStr(direction)
                 var nextDirection = NEXT_DIRECTION_TO_LEFT[directionStr]
+                if (stonesInMove[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x] != null)
+                {
+                    //continue
+                }
                 var nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
                 if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
                     stone.direction = nextDirection
@@ -888,6 +917,10 @@ scene("game", () => {
                 for (var i = 0; i < 4; i++) {
                     directionStr = directionVecToStr(direction)
                     nextDirection = NEXT_DIRECTION_TO_RIGHT[directionStr]
+                    if (stonesInMove[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x] != null)
+                    {
+                        //continue
+                    }
                     nextObj = items[stone.position.y + nextDirection.y][stone.position.x + nextDirection.x]
                     if (nextObj == null || (nextObj != null && nextObj.is("firefly"))) {
                         stone.direction = nextDirection
@@ -930,12 +963,31 @@ scene("game", () => {
                     var obj = items[stone.position.y][stone.position.x];
                     items[stone.position.y][stone.position.x] = stone
 
-                    if (obj != null && obj.is("man")) {
-                        playerBoom()
-                    }
+                    stoneImpactedOn(obj)
                 }
             }
         }
+    }
+
+    function stoneImpactedOn(obj) {
+        if (obj == null) {
+            return
+        }
+
+        if (obj.is("man")) {
+            playerBoom()
+        } else if (obj.is("firefly")) {
+            boomObject(obj)
+        }
+    }
+
+    function boomObject(obj) {
+        if (obj == null) {
+            return
+        }
+
+        boom(obj.position)
+        destroy(obj)
     }
 
     function moveFirefly() {
@@ -955,11 +1007,15 @@ scene("game", () => {
                 var stonePos = stone.position.clone()
 
                 var newPosition = stone.position.add(stone.direction)
-                crossingObj = items[newPosition.y][newPosition.x]
-                if (crossingObj != null) {
-                    if (crossingObj.moveProcessed) {
-                        continue
-                    }
+                // Does some stone plan to fall to there?
+                if (stonesInMove[newPosition.y][newPosition.x] != null) {
+                    // skip step.
+                    continue
+                }
+
+                var crossingObj = items[newPosition.y][newPosition.x]
+                if (crossingObj != null && crossingObj.is("firefly") && crossingObj.moveProcessed) {
+                    continue
                 }
 
                 stone.position = stone.position.add(stone.direction)
@@ -981,9 +1037,10 @@ scene("game", () => {
     }
 
     function detectFlyableCollisions() {
+        // Is player touching something dangerous?
         for (var i = 0; i < 4; i++) {
             var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
-            if (nextTo != null && nextTo.is("moveable")) {
+            if (nextTo != null && nextTo.is("enemy")) {
                 playerBoom()
                 break
             }
@@ -1084,7 +1141,7 @@ scene("game", () => {
 
             markStonesToMove()
             markFirefliesToMove()
-            reposObjects()
+            //reposObjects()
             cumulatedDelta = 0
         }
 
