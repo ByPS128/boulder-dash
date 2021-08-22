@@ -941,7 +941,7 @@ scene("game", () => {
         }
     }
 
-    function detectEnemyCollisions() {
+    function processRockfordCollisionsWithEnemies() {
         // Is rockford touching something dangerous?
         for (var i = 0; i < 4; i++) {
             var nextTo = items[rockford.position.y + FIREFLY_INIT_DIRECTIONS[i].y][rockford.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
@@ -1147,7 +1147,7 @@ scene("game", () => {
             moveFirefly()
 
             if (playing) {
-                detectEnemyCollisions()
+                processRockfordCollisionsWithEnemies()
             }
 
             markBouldersToMove()
