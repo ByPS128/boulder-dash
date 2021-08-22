@@ -133,20 +133,20 @@ loadSprite(SPRITES_BOULDER_DASH, SPRITE_FILENAME, {
             to: SPAWN_FRAME,
         },
         explosion_anim: {
-            from: 100,
-            to: 102,
+            from: EXPLOSION_FRAME,
+            to: EXPLOSION_FRAME + 2,
         },
         firefly_anim: {
-            from: 80,
-            to: 83,
+            from: FIREFLY_FRAME,
+            to: FIREFLY_FRAME + 3,
         },
         butterfly_anim: {
-            from: 90,
-            to: 93,
+            from: BUTTERFLY_FRAME,
+            to: BUTTERFLY_FRAME + 3,
         },
         diamond_anim: {
-            from: 40,
-            to: 47,
+            from: DIAMOND_FRAME,
+            to: DIAMOND_FRAME + 7,
         }
     }
 })
@@ -254,7 +254,7 @@ scene("game", () => {
         }
     }
 
-    function createPlayer() {
+    function createRockford() {
         var obj = add([
             sprite(SPRITES_BOULDER_DASH, {
                 animSpeed: 0.3,
@@ -290,7 +290,7 @@ scene("game", () => {
     var camPosWanted = VEC_ZERO.clone()
     var camOffset = VEC_ZERO.clone()
 
-    var player = createPlayer()
+    var rockford = createRockford()
     var lastKeyDown = "null2"
 
     function calculateWantedCamPos() {
@@ -301,26 +301,26 @@ scene("game", () => {
         var oldCamOffset = camOffset.clone()
 
         // X
-        if (player.position.x - camOffset.x < 5) {
+        if (rockford.position.x - camOffset.x < 5) {
             if (camOffset.x > 0) {
                 camOffset = camOffset.add(DIR_LEFT)
             }
         }
 
-        if (player.position.x - camOffset.x > BOARD_VISIBLE_WIDTH - 5) {
+        if (rockford.position.x - camOffset.x > BOARD_VISIBLE_WIDTH - 5) {
             if (camOffset.x < BOARD_WIDTH - BOARD_VISIBLE_WIDTH) {
                 camOffset = camOffset.add(DIR_RIGHT)
             }
         }
 
         // Y
-        if (player.position.y - camOffset.y < 5) {
+        if (rockford.position.y - camOffset.y < 5) {
             if (camOffset.y > 0) {
                 camOffset = camOffset.add(DIR_UP)
             }
         }
 
-        if (player.position.y - camOffset.y > BOARD_VISIBLE_HEIGHT - 5) {
+        if (rockford.position.y - camOffset.y > BOARD_VISIBLE_HEIGHT - 5) {
             if (camOffset.y < BOARD_HEIGHT - BOARD_VISIBLE_HEIGHT) {
                 camOffset = camOffset.add(DIR_DOWN)
             }
@@ -333,7 +333,7 @@ scene("game", () => {
         }
     }
 
-    player.action(() => {
+    rockford.action(() => {
         calculateCamPos()
     })
 
@@ -358,9 +358,9 @@ scene("game", () => {
         }
         if (anim === BORN_ANIMATION) {
             destroy(spawn)
-            player.hidden = false
-            player.animSpeed = 0.3
-            player.play(IDDLE_ANIMATION)
+            rockford.hidden = false
+            rockford.animSpeed = 0.3
+            rockford.play(IDDLE_ANIMATION)
             playing = true
         }
     });
@@ -467,11 +467,11 @@ scene("game", () => {
 
 
     var items = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
-    var stonesInMove = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
+    var bouldersInMove = new Array(mapHeight).fill(null).map(() => new Array(mapWidth).fill(null));
     for (var y = 0; y < mapHeight; y++) {
         var row = map[y]
         for (var x = 0; x < mapWidth; x++) {
-            stonesInMove[y][x] = null
+            bouldersInMove[y][x] = null
 
             var ch = row[x]
             if (ch === '*') {
@@ -583,15 +583,15 @@ scene("game", () => {
                 ])
                 items[y][x] = obj
             } else if (ch === 'S') {
-                player.position = vec2(x, y)
-                player.pos = player.position.scale(BLOCK_SIZE)
-                items[player.position.y][player.position.x] = player
+                rockford.position = vec2(x, y)
+                rockford.pos = rockford.position.scale(BLOCK_SIZE)
+                items[rockford.position.y][rockford.position.x] = rockford
 
                 calculateWantedCamPos()
                 camPosCurrent = camPosWanted
 
-                spawn.position = player.position
-                spawn.pos = player.pos
+                spawn.position = rockford.position
+                spawn.pos = rockford.pos
             } else if (ch === 'E') {
                 exit.position = vec2(x, y)
                 exit.pos = vec2(x, y).scale(BLOCK_SIZE)
@@ -611,14 +611,14 @@ scene("game", () => {
     function setupPlayer() {
         return {
             playAnimByDirection() {
-                if (player.direction.eq(DIR_LEFT)) {
-                    player.playAnimIfIsDifferent(RUN_LEFT_ANIMATION)
-                } else if (player.direction.eq(DIR_RIGHT)) {
-                    player.playAnimIfIsDifferent(RUN_RIGHT_ANIMATION)
-                } else if (player.direction.eq(DIR_UP) || player.direction.eq(DIR_DOWN)) {
-                    player.animSpeed = 0.05
-                    player.play(player.lastSideAnim)
-                    player.currentAnim = player.lastSideAnim
+                if (rockford.direction.eq(DIR_LEFT)) {
+                    rockford.playAnimIfIsDifferent(RUN_LEFT_ANIMATION)
+                } else if (rockford.direction.eq(DIR_RIGHT)) {
+                    rockford.playAnimIfIsDifferent(RUN_RIGHT_ANIMATION)
+                } else if (rockford.direction.eq(DIR_UP) || rockford.direction.eq(DIR_DOWN)) {
+                    rockford.animSpeed = 0.05
+                    rockford.play(rockford.lastSideAnim)
+                    rockford.currentAnim = rockford.lastSideAnim
                 }
             },
             playAnimIfIsDifferent(animationName) {
@@ -642,17 +642,17 @@ scene("game", () => {
                 this.play(IDDLE_ANIMATION)
             },
             canPush() {
-                if (randomInteger(0, 5) > 1 || player.pushAttempts < 2) {
-                    player.pushAttempts++
+                if (randomInteger(0, 5) > 1 || rockford.pushAttempts < 2) {
+                    rockford.pushAttempts++
                     return false
                 }
-                player.pushAttempts = 0
+                rockford.pushAttempts = 0
                 return true
             },
         }
     }
 
-    function removeMud(mudPos) {
+    function removeDirt(mudPos) {
         var mud = items[mudPos.y][mudPos.x]
         if (mud == null) {
             return
@@ -723,100 +723,100 @@ scene("game", () => {
         }
     }
 
-    function movePlayer() {
-        // is player iddle?
-        if (player.direction.eq(VEC_ZERO)) {
-            if (player.lastSideAnim != IDDLE_ANIMATION) {
-                player.setIddle()
+    function moveRockford() {
+        // is rockford iddle?
+        if (rockford.direction.eq(VEC_ZERO)) {
+            if (rockford.lastSideAnim != IDDLE_ANIMATION) {
+                rockford.setIddle()
             }
 
             return
         }
 
-        player.playAnimByDirection()
-        var directedPosition = player.position.add(player.direction)
+        rockford.playAnimByDirection()
+        var directedPosition = rockford.position.add(rockford.direction)
         var obj = items[directedPosition.y][directedPosition.x]
         if (obj != null && obj.is(EXIT_TAG)) {
             destroy(obj)
-            player.move()
+            rockford.move()
             playing = false
             go("win", {
                 score: scoreLabel.value,
                 level: levelLabel.value,
             })
         } else if (obj != null && obj.is(DIAMOND_TAG)) {
-            removeDiamond(player.position.add(player.direction))
-            player.move()
+            removeDiamond(rockford.position.add(rockford.direction))
+            rockford.move()
             return
         } else if (obj != null && obj.is(DIRT_TAG)) {
-            removeMud(player.position.add(player.direction))
-            player.move()
+            removeDirt(rockford.position.add(rockford.direction))
+            rockford.move()
             return
         } else if (obj == null) {
-            player.move()
+            rockford.move()
             return
         }
 
 
-        if (player.direction.eq(DIR_LEFT)) {
-            var stone = obj
-            if (stone != null && stone.is(BOULDER_TAG)) {
-                var nextToStone = items[player.position.y][player.position.x - 2]
-                if (nextToStone != null) {
+        if (rockford.direction.eq(DIR_LEFT)) {
+            if (obj != null && boulder.is(BOULDER_TAG)) {
+                var boulder = obj
+                var nextToBoulder = items[rockford.position.y][rockford.position.x - 2]
+                if (nextToBoulder != null) {
                     return;
                 }
 
-                if (!player.canPush()) {
+                if (!rockford.canPush()) {
                     return
                 }
 
-                var underStone = items[player.position.y + 1][player.position.x - 1]
-                newFallingState = (underStone == null)
+                var belowBoulder = items[rockford.position.y + 1][rockford.position.x - 1]
+                newFallingState = (belowBoulder == null)
                 if (newFallingState) {
-                    stone.position = stone.position.add(DIR_DOWN)
-                    stone.pos = stone.position.scale(BLOCK_SIZE)
-                    items[player.position.y][player.position.x - 1] = null
-                    items[player.position.y + 1][player.position.x - 1] = stone
+                    boulder.position = boulder.position.add(DIR_DOWN)
+                    boulder.pos = boulder.position.scale(BLOCK_SIZE)
+                    items[rockford.position.y][rockford.position.x - 1] = null
+                    items[rockford.position.y + 1][rockford.position.x - 1] = boulder
                 } else {
-                    stone.position = stone.position.add(player.direction)
-                    stone.pos = stone.position.scale(BLOCK_SIZE)
-                    items[player.position.y][player.position.x - 1] = null
-                    items[player.position.y][player.position.x - 2] = stone
+                    boulder.position = boulder.position.add(rockford.direction)
+                    boulder.pos = boulder.position.scale(BLOCK_SIZE)
+                    items[rockford.position.y][rockford.position.x - 1] = null
+                    items[rockford.position.y][rockford.position.x - 2] = boulder
                 }
-                stone.isFalling = newFallingState
-                player.move()
+                boulder.isFalling = newFallingState
+                rockford.move()
             }
 
-        } else if (player.direction.eq(DIR_RIGHT)) {
-            var stone = obj
-            if (stone != null && stone.is(BOULDER_TAG)) {
-                var nextToStone = items[player.position.y][player.position.x + 2]
-                if (nextToStone != null) {
+        } else if (rockford.direction.eq(DIR_RIGHT)) {
+            if (obj != null && boulder.is(BOULDER_TAG)) {
+                var boulder = obj
+                var nextToBoulder = items[rockford.position.y][rockford.position.x + 2]
+                if (nextToBoulder != null) {
                     return;
                 }
 
-                if (!player.canPush()) {
+                if (!rockford.canPush()) {
                     return
                 }
 
-                var underStone = items[player.position.y + 1][player.position.x + 1]
-                newFallingState = (underStone == null)
+                var belowBoulder = items[rockford.position.y + 1][rockford.position.x + 1]
+                newFallingState = (belowBoulder == null)
                 if (newFallingState) {
-                    stone.position = stone.position.add(DIR_DOWN)
-                    stone.pos = stone.position.scale(BLOCK_SIZE)
-                    items[player.position.y][player.position.x + 1] = null
-                    items[player.position.y + 1][player.position.x + 1] = stone
+                    boulder.position = boulder.position.add(DIR_DOWN)
+                    boulder.pos = boulder.position.scale(BLOCK_SIZE)
+                    items[rockford.position.y][rockford.position.x + 1] = null
+                    items[rockford.position.y + 1][rockford.position.x + 1] = boulder
                 } else {
-                    stone.position = stone.position.add(player.direction)
-                    stone.pos = stone.position.scale(BLOCK_SIZE)
-                    items[player.position.y][player.position.x + 1] = null
-                    items[player.position.y][player.position.x + 2] = stone
+                    boulder.position = boulder.position.add(rockford.direction)
+                    boulder.pos = boulder.position.scale(BLOCK_SIZE)
+                    items[rockford.position.y][rockford.position.x + 1] = null
+                    items[rockford.position.y][rockford.position.x + 2] = boulder
                 }
-                stone.isFalling = newFallingState
-                player.move()
+                boulder.isFalling = newFallingState
+                rockford.move()
             }
 
-        } else if (player.direction.eq(DIR_UP) || player.direction.eq(DIR_DOWN)) {
+        } else if (rockford.direction.eq(DIR_UP) || rockford.direction.eq(DIR_DOWN)) {
             if (obj != null && obj.is(BOULDER_TAG)) {
                 return;
             }
@@ -861,7 +861,7 @@ scene("game", () => {
                 // Trapped or paused firefly?
                 if (firefly.direction.eq(VEC_ZERO)) {
                     firefly.direction = getFirstAvailableFireflyDirection(firefly)
-                    // Still trapped? (can be released by near explsion(s) or by released or moved stone(s))
+                    // Still trapped? (can be released by near explsion(s) or by released or moved boulder(s))
                     if (firefly.direction.eq(VEC_ZERO)) {
                         continue
                     }
@@ -912,8 +912,8 @@ scene("game", () => {
                 var fireflyPositionClone = firefly.position.clone()
 
                 var newPosition = firefly.position.add(firefly.direction)
-                // Does some stone plan to fall to there?
-                if (stonesInMove[newPosition.y][newPosition.x] != null) {
+                // Does some boulder plan to fall to there?
+                if (bouldersInMove[newPosition.y][newPosition.x] != null) {
                     // skip step.
                     continue
                 }
@@ -941,70 +941,84 @@ scene("game", () => {
         }
     }
 
-    function detectFlyableCollisions() {
-        // Is player touching something dangerous?
+    function detectEnemyCollisions() {
+        // Is rockford touching something dangerous?
         for (var i = 0; i < 4; i++) {
-            var nextTo = items[player.position.y + FIREFLY_INIT_DIRECTIONS[i].y][player.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
+            var nextTo = items[rockford.position.y + FIREFLY_INIT_DIRECTIONS[i].y][rockford.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
             if (nextTo != null && nextTo.is(ENEMY_ROLE_TAG)) {
-                playerBoom()
+                boomRockford()
                 break
             }
         }
     }
 
-    function markStonesToMove() {
+    function resetMovingFlags() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
-                var stone = items[y][x]
-                if (stone == null) {
+                bouldersInMove[y][x] = null
+                var obj = items[y][x]
+                if (obj == null || (obj != null && !obj.is(MOVEABLE_ROLE_TAG))) {
                     continue
                 }
-                if (stone.is(BOULDER_TAG)) {
-                    var under = items[stone.position.y + 1][stone.position.x]
-                    if (under == null || (under != null && (under.is(ROCKFORD_TAG) || under.is(ENEMY_ROLE_TAG)) && stone.isFalling)) {
-                        var isTargetreserved = stonesInMove[stone.position.y + 1][stone.position.x] != null
+                obj.moveProcessed = false
+            }
+        }
+    }
+
+    function markBouldersToMove() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null) {
+                    continue
+                }
+                if (obj.is(BOULDER_TAG)) {
+                    var boulder = obj
+                    var below = items[boulder.position.y + 1][boulder.position.x]
+                    if (below == null || (below != null && (below.is(ROCKFORD_TAG) || below.is(ENEMY_ROLE_TAG)) && boulder.isFalling)) {
+                        var isTargetreserved = bouldersInMove[boulder.position.y + 1][boulder.position.x] != null
                         if (!isTargetreserved) {
-                            stone.isFalling = true
-                            stone.direction = DIR_DOWN
-                            stone.fallScenario = null
-                            stonesInMove[stone.position.y + 1][stone.position.x] = stone
+                            boulder.isFalling = true
+                            boulder.direction = DIR_DOWN
+                            boulder.fallScenario = null
+                            bouldersInMove[boulder.position.y + 1][boulder.position.x] = boulder
                         }
                         continue
                     } else {
-                        if (under.is(BOULDER_TAG)) {
-                            var above = items[stone.position.y - 1][stone.position.x]
-                            var isStoneAbove = above != null && above.is(BOULDER_TAG)
-                            isStoneAbove = false
+                        if (below.is(BOULDER_TAG)) {
+                            var above = items[boulder.position.y - 1][boulder.position.x]
+                            var isBoulderAbove = above != null && above.is(BOULDER_TAG)
+                            isBoulderAbove = false
 
-                            var aboveLeft = items[stone.position.y - 1][stone.position.x - 1]
-                            var isStoneAboveLeft = aboveLeft != null && aboveLeft.is(BOULDER_TAG)
-                            var underLeft = items[stone.position.y + 1][stone.position.x - 1]
-                            var nextToLeft = items[stone.position.y][stone.position.x - 1]
-                            var isTargetreserved = stonesInMove[stone.position.y][stone.position.x - 1] != null
-                            if (!isStoneAbove && !isStoneAboveLeft && nextToLeft == null && underLeft == null && stone.fallScenario == null && !isTargetreserved) {
-                                stone.isFalling = true
-                                stone.direction = DIR_LEFT
-                                stone.fallScenario = "set"
-                                stonesInMove[stone.position.y][stone.position.x - 1] = stone
+                            var aboveLeft = items[boulder.position.y - 1][boulder.position.x - 1]
+                            var isBoulderAboveLeft = aboveLeft != null && aboveLeft.is(BOULDER_TAG)
+                            var belowLeft = items[boulder.position.y + 1][boulder.position.x - 1]
+                            var nextToLeft = items[boulder.position.y][boulder.position.x - 1]
+                            var isTargetreserved = bouldersInMove[boulder.position.y][boulder.position.x - 1] != null
+                            if (!isBoulderAbove && !isBoulderAboveLeft && nextToLeft == null && belowLeft == null && boulder.fallScenario == null && !isTargetreserved) {
+                                boulder.isFalling = true
+                                boulder.direction = DIR_LEFT
+                                boulder.fallScenario = "set"
+                                bouldersInMove[boulder.position.y][boulder.position.x - 1] = boulder
                                 continue
                             }
 
-                            var aboveRight = items[stone.position.y - 1][stone.position.x + 1]
-                            var isStoneAboveRight = aboveRight != null && aboveRight.is(BOULDER_TAG)
-                            var underRight = items[stone.position.y + 1][stone.position.x + 1]
-                            var nextToRight = items[stone.position.y][stone.position.x + 1]
-                            var isTargetreserved = stonesInMove[stone.position.y][stone.position.x + 1] != null
-                            if (!isStoneAbove && !isStoneAboveRight && nextToRight == null && underRight == null && stone.fallScenario == null && !isTargetreserved) {
-                                stone.isFalling = true
-                                stone.direction = DIR_RIGHT
-                                stone.fallScenario = "set"
-                                stonesInMove[stone.position.y][stone.position.x + 1] = stone
+                            var aboveRight = items[boulder.position.y - 1][boulder.position.x + 1]
+                            var isBoulderAboveRight = aboveRight != null && aboveRight.is(BOULDER_TAG)
+                            var belowRight = items[boulder.position.y + 1][boulder.position.x + 1]
+                            var nextToRight = items[boulder.position.y][boulder.position.x + 1]
+                            var isTargetreserved = bouldersInMove[boulder.position.y][boulder.position.x + 1] != null
+                            if (!isBoulderAbove && !isBoulderAboveRight && nextToRight == null && belowRight == null && boulder.fallScenario == null && !isTargetreserved) {
+                                boulder.isFalling = true
+                                boulder.direction = DIR_RIGHT
+                                boulder.fallScenario = "set"
+                                bouldersInMove[boulder.position.y][boulder.position.x + 1] = boulder
                                 continue
                             }
                         }
-                        stone.isFalling = false
-                        stone.direction = VEC_ZERO
-                        stone.fallScenario = null
+                        boulder.isFalling = false
+                        boulder.direction = VEC_ZERO
+                        boulder.fallScenario = null
                         continue
                     }
                 }
@@ -1012,37 +1026,38 @@ scene("game", () => {
         }
     }
 
-    function moveStones() {
+    function moveBoulders() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
-                var stone = items[y][x]
-                if (stone == null) {
+                var obj = items[y][x]
+                if (obj == null) {
                     continue
                 }
-                if (stone.is(BOULDER_TAG) && stone.isFalling && !stone.moveProcessed) {
-                    stone.moveProcessed = true
-                    var stonePos = stone.position.clone()
+                if (obj.is(BOULDER_TAG) && obj.isFalling && !obj.moveProcessed) {
+                    var boulder = obj
+                    boulder.moveProcessed = true
+                    var boulderPositionClone = boulder.position.clone()
 
-                    stone.position = stone.position.add(stone.direction)
-                    stone.pos = stone.position.scale(BLOCK_SIZE)
+                    boulder.position = boulder.position.add(boulder.direction)
+                    boulder.pos = boulder.position.scale(BLOCK_SIZE)
 
-                    items[stonePos.y][stonePos.x] = null
-                    var obj = items[stone.position.y][stone.position.x];
-                    items[stone.position.y][stone.position.x] = stone
+                    items[boulderPositionClone.y][boulderPositionClone.x] = null
+                    var obj = items[boulder.position.y][boulder.position.x];
+                    items[boulder.position.y][boulder.position.x] = boulder
 
-                    stoneImpactedOn(obj)
+                    boulderImpactedOn(obj)
                 }
             }
         }
     }
 
-    function stoneImpactedOn(obj) {
+    function boulderImpactedOn(obj) {
         if (obj == null) {
             return
         }
 
         if (obj.is(ROCKFORD_TAG)) {
-            playerBoom()
+            boomRockford()
         } else if (obj.is(FIREFLY_TAG)) {
             boomObject(obj)
         }
@@ -1057,12 +1072,12 @@ scene("game", () => {
         destroy(obj)
     }
 
-    function playerBoom() {
+    function boomRockford() {
         playing = false
-        var position = player.position
-        destroy(player)
-        player = createPlayer()
-        player.isDead = true
+        var position = rockford.position
+        destroy(rockford)
+        rockford = createRockford()
+        rockford.isDead = true
 
         boom(position)
     }
@@ -1094,35 +1109,9 @@ scene("game", () => {
         }
     }
 
-    function resetMovingFlags() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                stonesInMove[y][x] = null
-                var obj = items[y][x]
-                if (obj == null || (obj != null && !obj.is(MOVEABLE_ROLE_TAG))) {
-                    continue
-                }
-                obj.moveProcessed = false
-            }
-        }
-    }
-
-    function reposObjects() {
-        for (var y = mapHeight - 1; y >= 0; y--) {
-            for (var x = 0; x < mapWidth; x++) {
-                var obj = items[y][x]
-                if (obj == null) {
-                    continue
-                }
-                obj.position = vec2(x, y)
-                obj.pos = obj.position.scale(BLOCK_SIZE)
-            }
-        }
-    }
-
 
     initFireflies()
-    markStonesToMove()
+    markBouldersToMove()
     markFirefliesToMove()
 
     initialized = true
@@ -1134,7 +1123,7 @@ scene("game", () => {
         }
 
         if (playing) {
-            player.direction = getDirectionByKey()
+            rockford.direction = getDirectionByKey()
         }
 
         // camera movement
@@ -1153,23 +1142,23 @@ scene("game", () => {
         // is it time to move objects?
         if (cumulatedDelta > SPEED) {
             resetMovingFlags()
-            movePlayer()
-            moveStones()
+            moveRockford()
+            moveBoulders()
             moveFirefly()
 
             if (playing) {
-                detectFlyableCollisions()
+                detectEnemyCollisions()
             }
 
-            markStonesToMove()
+            markBouldersToMove()
             markFirefliesToMove()
-            //reposObjects()
             cumulatedDelta = 0
         }
 
         cumulatedDelta += dt()
     })
 
+    // destroy object everytime when animation of explosion finishes
     on("animEnd", EXPLOSION_ANIMATION, (obj) => {
         items[obj.position.y][obj.position.x] = null
         destroy(obj)
