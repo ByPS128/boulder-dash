@@ -157,6 +157,7 @@ loadSprite(SPRITES_BOULDER_DASH, SPRITE_FILENAME, {
         diamond_anim: {
             from: DIAMOND_FRAME,
             to: DIAMOND_FRAME + 7,
+            speed: 2,
         }
     }
 })

@@ -1,0 +1,20 @@
+{
+  "name": "boulder-dash-js",
+  "version": "2.0.0",
+  "description": "Boulder Dash clone using KaPlay 3000.x and TypeScript",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "kaplay": "^3000.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}

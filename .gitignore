@@ -1,4 +1,17 @@
-# Python
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+.vite/
+*.tsbuildinfo
+
+# Python (legacy)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,11 +24,16 @@ __pycache__/
 *.swo
 *~
 
-# Run configurations (keep only the specific run config)
+# Run configurations (keep only the specific run configs)
 !.run/
 .run/*
 !.run/Boulder Dash.run.xml
+!.run/Boulder Dash Dev.run.xml
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Environment
+.env
+.env.local
