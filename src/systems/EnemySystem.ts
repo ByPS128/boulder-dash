@@ -26,6 +26,9 @@ export class EnemySystem {
   private bouldersInMove: (GameObjFalling | null)[][]
   private mapWidth: number
   private mapHeight: number
+  // OPTIMIZATION: Cache enemy arrays - initialized once, reused every tick
+  private fireflies: GameObjEnemy[] = []
+  private butterflies: GameObjEnemy[] = []
 
   constructor(k: KAPLAYCtx, items: (GameObjWithPos | null)[][], bouldersInMove: (GameObjFalling | null)[][], mapWidth: number, mapHeight: number) {
     this.k = k
@@ -38,11 +41,12 @@ export class EnemySystem {
   /**
    * Initialize all Fireflies with their starting directions
    * Fireflies navigate CLOCKWISE (prefer LEFT)
-   * OPTIMIZED: Uses k.every() instead of nested loops
+   * OPTIMIZED: Caches fireflies array for reuse
    */
   initFireflies(): void {
-    this.k.get(FIREFLY_TAG).forEach((obj) => {
-      const firefly = obj as GameObjEnemy
+    // Cache fireflies ONCE - k.get() called only here, not every tick!
+    this.fireflies = this.k.get(FIREFLY_TAG) as GameObjEnemy[]
+    this.fireflies.forEach((firefly) => {
       firefly.direction = this.getFirstAvailableFireflyDirection(firefly)
     })
   }
@@ -50,11 +54,12 @@ export class EnemySystem {
   /**
    * Initialize all Butterflies with their starting directions
    * Butterflies navigate COUNTERCLOCKWISE (prefer RIGHT)
-   * OPTIMIZED: Uses k.every() instead of nested loops
+   * OPTIMIZED: Caches butterflies array for reuse
    */
   initButterflies(): void {
-    this.k.get(BUTTERFLY_TAG).forEach((obj) => {
-      const butterfly = obj as GameObjEnemy
+    // Cache butterflies ONCE - k.get() called only here, not every tick!
+    this.butterflies = this.k.get(BUTTERFLY_TAG) as GameObjEnemy[]
+    this.butterflies.forEach((butterfly) => {
       butterfly.direction = this.getFirstAvailableButterflyDirection(butterfly)
     })
   }
@@ -110,7 +115,7 @@ export class EnemySystem {
   markFirefliesToMove(): void {
     const VEC_ZERO = VEC_ZERO_FACTORY()
 
-    this.k.get(FIREFLY_TAG).forEach((obj) => {
+    this.fireflies.forEach((obj) => {
       const firefly = obj as GameObjEnemy
       firefly.mustWait = false
 
@@ -164,7 +169,7 @@ export class EnemySystem {
   markButterFliesToMove(): void {
     const VEC_ZERO = VEC_ZERO_FACTORY()
 
-    this.k.get(BUTTERFLY_TAG).forEach((obj) => {
+    this.butterflies.forEach((obj) => {
       const butterfly = obj as GameObjEnemy
       butterfly.mustWait = false
 
@@ -211,7 +216,7 @@ export class EnemySystem {
   moveFireflies(): void {
     const VEC_ZERO = VEC_ZERO_FACTORY()
 
-    this.k.get(FIREFLY_TAG).forEach((obj) => {
+    this.fireflies.forEach((obj) => {
       const firefly = obj as GameObjEnemy
       if (firefly.moveProcessed || firefly.mustWait || vecEquals(firefly.direction, VEC_ZERO)) {
         return
@@ -266,7 +271,7 @@ export class EnemySystem {
   moveButterflies(): void {
     const VEC_ZERO = VEC_ZERO_FACTORY()
 
-    this.k.get(BUTTERFLY_TAG).forEach((obj) => {
+    this.butterflies.forEach((obj) => {
       const butterfly = obj as GameObjEnemy
       if (butterfly.moveProcessed || butterfly.mustWait || vecEquals(butterfly.direction, VEC_ZERO)) {
         return

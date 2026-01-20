@@ -140,33 +140,33 @@ export class GameScene {
     // Load level
     this.loadLevel()
 
-    // // Initialize explosion system
-    // this.explosionSystem = new ExplosionSystem(
-    //   this.k,
-    //   this.entityFactory,
-    //   this.physicsSystem.getItems()
-    // )
-    //
-    // // Initialize enemy system (optimized with k.every())
-    // this.enemySystem = new EnemySystem(
-    //   this.k,
-    //   this.physicsSystem.getItems(),
-    //   this.physicsSystem.getBouldersInMove(),
-    //   this.mapWidth,
-    //   this.mapHeight
-    // )
-    //
-    // // Initialize enemies
-    // this.enemySystem.initFireflies()
-    // this.enemySystem.initButterflies()
-    //
-    // // Initial physics calculations
-    // this.physicsSystem.markBouldersToMove()
-    // this.enemySystem.markFirefliesToMove()
-    // this.enemySystem.markButterFliesToMove()
-    //
-    // // Start spawn animation (onAnimEnd callback is set during spawn creation)
-     this.spawn.play(SPAWN_ANIMATION)
+    // Initialize explosion system
+    this.explosionSystem = new ExplosionSystem(
+      this.k,
+      this.entityFactory,
+      this.physicsSystem.getItems()
+    )
+
+    // Initialize enemy system (optimized with cached arrays)
+    this.enemySystem = new EnemySystem(
+      this.k,
+      this.physicsSystem.getItems(),
+      this.physicsSystem.getBouldersInMove(),
+      this.mapWidth,
+      this.mapHeight
+    )
+
+    // Initialize enemies (caches fireflies and butterflies arrays)
+    this.enemySystem.initFireflies()
+    this.enemySystem.initButterflies()
+
+    // Initial physics calculations
+    this.physicsSystem.markBouldersToMove()
+    this.enemySystem.markFirefliesToMove()
+    this.enemySystem.markButterFliesToMove()
+
+    // Start spawn animation (onAnimEnd callback is set during spawn creation)
+    this.spawn.play(SPAWN_ANIMATION)
     //
     // // Setup explosion animation cleanup
     // this.setupExplosionCleanup()
@@ -827,7 +827,6 @@ export class GameScene {
    */
   private startGameLoop(): void {
     this.k.onUpdate(() => {
-      return 
       
       if (!this.initialized) return
 
