@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KaPlay Performance Test</title>
+</head>
+<body style="margin: 0; padding: 0; background: #000;">
+    <script type="module">
+        import kaplay from './node_modules/kaplay/dist/kaplay.mjs'
+
+        const k = kaplay({
+            width: 320,
+            height: 240,
+            scale: 3,
+            background: [0, 0, 0]
+        })
+
+        let frameCount = 0
+        let lastTime = performance.now()
+
+        // Just a simple rectangle
+        k.add([
+            k.rect(32, 32),
+            k.color(255, 0, 0),
+            k.pos(160, 120)
+        ])
+
+        k.onUpdate(() => {
+            frameCount++
+            const now = performance.now()
+            const delta = now - lastTime
+
+            if (frameCount % 10 === 0) {
+                console.log(`Frame ${frameCount}, dt: ${k.dt().toFixed(3)}s, timeSinceLastFrame: ${delta.toFixed(1)}ms, FPS: ${(1000/delta).toFixed(1)}`)
+            }
+
+            lastTime = now
+        })
+
+        console.log('Minimal KaPlay test started')
+    </script>
+</body>
+</html>
