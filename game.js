@@ -837,11 +837,35 @@ scene("game", () => {
         }
     }
 
+    function initButterflies() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is(BUTTERFLY_TAG)) {
+                    continue
+                }
+
+                var butterfly = obj
+                butterfly.direction = getFirstAvailableButterflyDirection(butterfly)
+            }
+        }
+    }
+
     function getFirstAvailableFireflyDirection(firefly) {
         for (var i = 0; i < 4; i++) {
             var nextTo = items[firefly.position.y + FIREFLY_INIT_DIRECTIONS[i].y][firefly.position.x + FIREFLY_INIT_DIRECTIONS[i].x]
             if (nextTo == null) {
                 return FIREFLY_INIT_DIRECTIONS[i]
+            }
+        }
+        return VEC_ZERO
+    }
+
+    function getFirstAvailableButterflyDirection(butterfly) {
+        for (var i = 0; i < 4; i++) {
+            var nextTo = items[butterfly.position.y + BUTTERFLY_INIT_DIRECTIONS[i].y][butterfly.position.x + BUTTERFLY_INIT_DIRECTIONS[i].x]
+            if (nextTo == null) {
+                return BUTTERFLY_INIT_DIRECTIONS[i]
             }
         }
         return VEC_ZERO
@@ -896,6 +920,55 @@ scene("game", () => {
         }
     }
 
+    function markButterFliesToMove() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is(BUTTERFLY_TAG)) {
+                    continue
+                }
+
+                var butterfly = obj
+                butterfly.mustWait = false
+
+                // Trapped or paused butterfly?
+                if (butterfly.direction.eq(VEC_ZERO)) {
+                    butterfly.direction = getFirstAvailableButterflyDirection(butterfly)
+                    // Still trapped?
+                    if (butterfly.direction.eq(VEC_ZERO)) {
+                        continue
+                    }
+                }
+
+                // Butterfly can navigate by following the right side (counterclockwise)
+                var directionStr = directionVecToStr(butterfly.direction)
+                var nextDirection = NEXT_DIRECTION_TO_RIGHT[directionStr]
+                var nextObj = items[butterfly.position.y + nextDirection.y][butterfly.position.x + nextDirection.x]
+                if (nextObj == null || (nextObj != null && nextObj.is(BUTTERFLY_TAG))) {
+                    // Turning right is free way
+                    butterfly.direction = nextDirection
+                    continue
+                }
+
+                // Can continue straight?
+                nextDirection = CURRENT_DIRECTION[directionStr]
+                nextObj = items[butterfly.position.y + nextDirection.y][butterfly.position.x + nextDirection.x]
+                if (nextObj == null || (nextObj != null && nextObj.is(BUTTERFLY_TAG))) {
+                    // Continue straight, there is free way
+                    butterfly.direction = nextDirection
+                    continue
+                }
+
+                // Turn left (opposite of preferred direction)
+                butterfly.direction = NEXT_DIRECTION_TO_LEFT[directionStr]
+
+                // Butterfly can stop for a brief moment if there is no Empty Space to the right side before resuming navigation
+                butterfly.mustWait = true
+                continue;
+            }
+        }
+    }
+
     function moveFirefly() {
         for (var y = mapHeight - 1; y >= 0; y--) {
             for (var x = 0; x < mapWidth; x++) {
@@ -941,6 +1014,51 @@ scene("game", () => {
         }
     }
 
+    function moveButterfly() {
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is(BUTTERFLY_TAG)) {
+                    continue
+                }
+
+                var butterfly = obj
+                if (butterfly.moveProcessed || butterfly.mustWait || butterfly.direction.eq(VEC_ZERO)) {
+                    continue
+                }
+
+                var butterflyPositionClone = butterfly.position.clone()
+
+                var newPosition = butterfly.position.add(butterfly.direction)
+                // Does some boulder plan to fall to there?
+                if (bouldersInMove[newPosition.y][newPosition.x] != null) {
+                    // skip step.
+                    continue
+                }
+
+                var crossingObj = items[newPosition.y][newPosition.x]
+                if (crossingObj != null && crossingObj.is(BUTTERFLY_TAG) && crossingObj.moveProcessed) {
+                    continue
+                }
+
+                butterfly.position = butterfly.position.add(butterfly.direction)
+                butterfly.pos = butterfly.position.scale(BLOCK_SIZE)
+
+                butterfly.moveProcessed = true
+
+                items[butterflyPositionClone.y][butterflyPositionClone.x] = null
+                items[butterfly.position.y][butterfly.position.x] = butterfly
+
+                if (crossingObj != null) {
+                    crossingObj.position = crossingObj.position.add(crossingObj.direction)
+                    crossingObj.pos = crossingObj.position.scale(BLOCK_SIZE)
+                    items[crossingObj.position.y][crossingObj.position.x] = crossingObj
+                    crossingObj.moveProcessed = true
+                }
+            }
+        }
+    }
+
     function processRockfordCollisionsWithEnemies() {
         // Is rockford touching something dangerous?
         for (var i = 0; i < 4; i++) {
@@ -948,6 +1066,38 @@ scene("game", () => {
             if (nextTo != null && nextTo.is(ENEMY_ROLE_TAG)) {
                 boomRockford()
                 break
+            }
+        }
+    }
+
+    function processEnemyCollisionsWithAmoeba() {
+        // Check if any enemy is touching Amoeba
+        for (var y = mapHeight - 1; y >= 0; y--) {
+            for (var x = 0; x < mapWidth; x++) {
+                var obj = items[y][x]
+                if (obj == null || !obj.is(ENEMY_ROLE_TAG)) {
+                    continue
+                }
+
+                var enemy = obj
+
+                // Check all 4 directions for Amoeba touch
+                for (var i = 0; i < 4; i++) {
+                    var checkY = enemy.position.y + FIREFLY_INIT_DIRECTIONS[i].y
+                    var checkX = enemy.position.x + FIREFLY_INIT_DIRECTIONS[i].x
+                    var nextTo = items[checkY][checkX]
+
+                    if (nextTo != null && nextTo.is(AMOEBA_TAG)) {
+                        // Amoeba touch detected! Enemy dies immediately
+                        if (enemy.is(FIREFLY_TAG)) {
+                            boomObject(enemy)
+                        } else if (enemy.is(BUTTERFLY_TAG)) {
+                            // Direct kill by Amoeba -> 9 diamonds
+                            boomButterfly(enemy, false)
+                        }
+                        break // Enemy already killed, exit inner loop
+                    }
+                }
             }
         }
     }
@@ -1045,13 +1195,13 @@ scene("game", () => {
                     var obj = items[boulder.position.y][boulder.position.x];
                     items[boulder.position.y][boulder.position.x] = boulder
 
-                    boulderImpactedOn(obj)
+                    fallingObjectImpactedOn(obj)
                 }
             }
         }
     }
 
-    function boulderImpactedOn(obj) {
+    function fallingObjectImpactedOn(obj) {
         if (obj == null) {
             return
         }
@@ -1060,6 +1210,10 @@ scene("game", () => {
             boomRockford()
         } else if (obj.is(FIREFLY_TAG)) {
             boomObject(obj)
+        } else if (obj.is(BUTTERFLY_TAG)) {
+            // Check if butterfly was killed by chain explosion
+            var isChainExplosion = obj.killedByExplosion === true
+            boomButterfly(obj, isChainExplosion)
         }
     }
 
@@ -1072,6 +1226,23 @@ scene("game", () => {
         destroy(obj)
     }
 
+    function boomButterfly(butterfly, isChainExplosion) {
+        if (butterfly == null) {
+            return
+        }
+
+        var position = butterfly.position
+        destroy(butterfly)
+
+        if (isChainExplosion) {
+            // Chain explosion: no bonus, standard explosion
+            boom(position, "standard")
+        } else {
+            // Direct kill (Boulder/Diamond/Amoeba): 9 diamonds
+            boom(position, "butterfly")
+        }
+    }
+
     function boomRockford() {
         playing = false
         var position = rockford.position
@@ -1082,7 +1253,10 @@ scene("game", () => {
         boom(position)
     }
 
-    function boom(position) {
+    function boom(position, explosionType) {
+        // explosionType: "standard" (default) or "butterfly" (9 diamonds)
+        explosionType = explosionType || "standard"
+
         for (var x = position.x - 1; x < position.x + 2; x++) {
             for (var y = position.y - 1; y < position.y + 2; y++) {
                 var obj = items[y][x]
@@ -1091,28 +1265,58 @@ scene("game", () => {
                         continue
                     }
 
+                    // Chain explosion detection: if explosion kills enemy, mark it
+                    if (obj.is(ENEMY_ROLE_TAG)) {
+                        obj.killedByExplosion = true
+                    }
+
                     destroy(obj)
                 }
 
-                var explosionObj = add([
-                    sprite(SPRITES_BOULDER_DASH, { frame: EXPLOSION_FRAME }),
-                    solid(),
-                    EXPLOSION_TAG,
-                    {
-                        position: vec2(x, y)
-                    }
-                ])
-                items[y][x] = explosionObj
-                explosionObj.pos = explosionObj.position.scale(BLOCK_SIZE)
-                explosionObj.play(EXPLOSION_ANIMATION, false)
+                // Create explosion or diamond based on type
+                if (explosionType === "butterfly") {
+                    // Butterfly explosion: create diamond
+                    var diamondObj = add([
+                        sprite(SPRITES_BOULDER_DASH, { frame: DIAMOND_FRAME, animSpeed: 0.05 }),
+                        solid(),
+                        BOULDER_TAG,
+                        DIAMOND_TAG,
+                        MOVEABLE_ROLE_TAG,
+                        pos(x * BLOCK_SIZE, y * BLOCK_SIZE),
+                        {
+                            position: vec2(x, y),
+                            isFalling: false,
+                            direction: VEC_ZERO,
+                            fallScenario: null,
+                            moveProcessed: false,
+                        }
+                    ])
+                    diamondObj.play(DIAMOND_ANIMATION)
+                    items[y][x] = diamondObj
+                } else {
+                    // Standard explosion
+                    var explosionObj = add([
+                        sprite(SPRITES_BOULDER_DASH, { frame: EXPLOSION_FRAME }),
+                        solid(),
+                        EXPLOSION_TAG,
+                        {
+                            position: vec2(x, y)
+                        }
+                    ])
+                    items[y][x] = explosionObj
+                    explosionObj.pos = explosionObj.position.scale(BLOCK_SIZE)
+                    explosionObj.play(EXPLOSION_ANIMATION, false)
+                }
             }
         }
     }
 
 
     initFireflies()
+    initButterflies()
     markBouldersToMove()
     markFirefliesToMove()
+    markButterFliesToMove()
 
     initialized = true
 
@@ -1145,13 +1349,16 @@ scene("game", () => {
             moveRockford()
             moveBoulders()
             moveFirefly()
+            moveButterfly()
 
             if (playing) {
                 processRockfordCollisionsWithEnemies()
+                processEnemyCollisionsWithAmoeba()
             }
 
             markBouldersToMove()
             markFirefliesToMove()
+            markButterFliesToMove()
             cumulatedDelta = 0
         }
 
