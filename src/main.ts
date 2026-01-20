@@ -22,6 +22,7 @@ const k = kaplay({
   letterbox: true,
   scale: 3,
   debug: false,
+  global: false,
   background: [0, 0, 0]
 })
 

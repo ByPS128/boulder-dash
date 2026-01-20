@@ -140,35 +140,36 @@ export class GameScene {
     // Load level
     this.loadLevel()
 
-    // Initialize explosion system
-    this.explosionSystem = new ExplosionSystem(
-      this.k,
-      this.entityFactory,
-      this.physicsSystem.getItems()
-    )
-
-    // Initialize enemy system
-    this.enemySystem = new EnemySystem(
-      this.physicsSystem.getItems(),
-      this.physicsSystem.getBouldersInMove(),
-      this.mapWidth,
-      this.mapHeight
-    )
-
-    // Initialize enemies
-    this.enemySystem.initFireflies()
-    this.enemySystem.initButterflies()
-
-    // Initial physics calculations
-    this.physicsSystem.markBouldersToMove()
-    this.enemySystem.markFirefliesToMove()
-    this.enemySystem.markButterFliesToMove()
-
-    // Start spawn animation (onAnimEnd callback is set during spawn creation)
-    this.spawn.play(SPAWN_ANIMATION)
-
-    // Setup explosion animation cleanup
-    this.setupExplosionCleanup()
+    // // Initialize explosion system
+    // this.explosionSystem = new ExplosionSystem(
+    //   this.k,
+    //   this.entityFactory,
+    //   this.physicsSystem.getItems()
+    // )
+    //
+    // // Initialize enemy system (optimized with k.every())
+    // this.enemySystem = new EnemySystem(
+    //   this.k,
+    //   this.physicsSystem.getItems(),
+    //   this.physicsSystem.getBouldersInMove(),
+    //   this.mapWidth,
+    //   this.mapHeight
+    // )
+    //
+    // // Initialize enemies
+    // this.enemySystem.initFireflies()
+    // this.enemySystem.initButterflies()
+    //
+    // // Initial physics calculations
+    // this.physicsSystem.markBouldersToMove()
+    // this.enemySystem.markFirefliesToMove()
+    // this.enemySystem.markButterFliesToMove()
+    //
+    // // Start spawn animation (onAnimEnd callback is set during spawn creation)
+     this.spawn.play(SPAWN_ANIMATION)
+    //
+    // // Setup explosion animation cleanup
+    // this.setupExplosionCleanup()
 
     this.initialized = true
 
@@ -283,10 +284,9 @@ export class GameScene {
       this.k.z(100),
       {
         setPos: (currentCamPos: Vec2) => {
-          this.uiBackground.pos = this.k.vec2(
-            currentCamPos.x - KABOOM_HALF_WIDTH,
-            currentCamPos.y - KABOOM_HALF_HEIGHT
-          )
+          // OPTIMIZED: Modify existing pos in place
+          this.uiBackground.pos.x = currentCamPos.x - KABOOM_HALF_WIDTH
+          this.uiBackground.pos.y = currentCamPos.y - KABOOM_HALF_HEIGHT
         }
       }
     ])
@@ -308,10 +308,9 @@ export class GameScene {
           this.scoreLabel.text = `score: ${this.scoreLabel.value}`
         },
         setPos: (currentCamPos: Vec2) => {
-          this.scoreLabel.pos = this.k.vec2(
-            currentCamPos.x - KABOOM_HALF_WIDTH + 30,
-            currentCamPos.y - KABOOM_HALF_HEIGHT + 6
-          )
+          // OPTIMIZED: Modify existing pos in place
+          this.scoreLabel.pos.x = currentCamPos.x - KABOOM_HALF_WIDTH + 30
+          this.scoreLabel.pos.y = currentCamPos.y - KABOOM_HALF_HEIGHT + 6
         }
       }
     ])
@@ -337,10 +336,9 @@ export class GameScene {
           this.diamondsNeededLabel.text = `needed: ${displayValue}`
         },
         setPos: (currentCamPos: Vec2) => {
-          this.diamondsNeededLabel.pos = this.k.vec2(
-            currentCamPos.x - KABOOM_HALF_WIDTH + 130,
-            currentCamPos.y - KABOOM_HALF_HEIGHT + 6
-          )
+          // OPTIMIZED: Modify existing pos in place
+          this.diamondsNeededLabel.pos.x = currentCamPos.x - KABOOM_HALF_WIDTH + 130
+          this.diamondsNeededLabel.pos.y = currentCamPos.y - KABOOM_HALF_HEIGHT + 6
         }
       }
     ])
@@ -358,10 +356,9 @@ export class GameScene {
           this.levelLabel.text = `level: ${this.levelLabel.value}`
         },
         setPos: (currentCamPos: Vec2) => {
-          this.levelLabel.pos = this.k.vec2(
-            currentCamPos.x - KABOOM_HALF_WIDTH + 240,
-            currentCamPos.y - KABOOM_HALF_HEIGHT + 6
-          )
+          // OPTIMIZED: Modify existing pos in place
+          this.levelLabel.pos.x = currentCamPos.x - KABOOM_HALF_WIDTH + 240
+          this.levelLabel.pos.y = currentCamPos.y - KABOOM_HALF_HEIGHT + 6
         }
       }
     ])
@@ -663,11 +660,16 @@ export class GameScene {
   private moveRockfordTo(newPosition: Vec2): void {
     const items = this.physicsSystem.getItems()
 
-    const lastPosition = this.k.vec2(this.rockford.position.x, this.rockford.position.y)
-    this.rockford.position = newPosition
-    this.rockford.pos = this.k.vec2(newPosition.x * BLOCK_SIZE, newPosition.y * BLOCK_SIZE)
+    // OPTIMIZED: Store old position without creating vec2
+    const lastX = this.rockford.position.x
+    const lastY = this.rockford.position.y
 
-    items[lastPosition.y][lastPosition.x] = null
+    this.rockford.position = newPosition
+    // OPTIMIZED: Modify existing pos in place
+    this.rockford.pos.x = newPosition.x * BLOCK_SIZE
+    this.rockford.pos.y = newPosition.y * BLOCK_SIZE
+
+    items[lastY][lastX] = null
     items[this.rockford.position.y][this.rockford.position.x] = this.rockford
   }
 
@@ -825,6 +827,8 @@ export class GameScene {
    */
   private startGameLoop(): void {
     this.k.onUpdate(() => {
+      return 
+      
       if (!this.initialized) return
 
       // Get input
@@ -838,15 +842,16 @@ export class GameScene {
       // Camera movement (smooth lerp)
       const distance = this.camPosCurrent.dist(this.camPosWanted)
       if (distance !== 0) {
-        const diff = this.k.vec2(
-          this.camPosWanted.x - this.camPosCurrent.x,
-          this.camPosWanted.y - this.camPosCurrent.y
-        )
-        this.camPosCurrent.x += diff.x * this.k.dt() * CAMERA_SPEED
-        this.camPosCurrent.y += diff.y * this.k.dt() * CAMERA_SPEED
+        // OPTIMIZED: Don't create new vec2, modify existing camPosCurrent directly
+        const diffX = this.camPosWanted.x - this.camPosCurrent.x
+        const diffY = this.camPosWanted.y - this.camPosCurrent.y
+        this.camPosCurrent.x += diffX * this.k.dt() * CAMERA_SPEED
+        this.camPosCurrent.y += diffY * this.k.dt() * CAMERA_SPEED
 
         if (distance < 1) {
-          this.camPosCurrent = this.k.vec2(this.camPosWanted.x, this.camPosWanted.y)
+          // OPTIMIZED: Modify in place instead of creating new vec2
+          this.camPosCurrent.x = this.camPosWanted.x
+          this.camPosCurrent.y = this.camPosWanted.y
         }
 
         this.k.camPos(this.camPosCurrent)
