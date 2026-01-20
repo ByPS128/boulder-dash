@@ -9,21 +9,42 @@ echo.
 REM Zjisti adresář scriptu
 cd /d "%~dp0"
 
-REM Kontrola Pythonu
-where python3 1>NUL 2>&1
+REM Kontrola Pythonu - zkus různé varianty
+set PYTHON_CMD=
+
+REM Zkus py launcher (standardní na Windows)
+py --version >NUL 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set PYTHON_CMD=py
+    goto :start_server
+)
+
+REM Zkus python3
+python3 --version >NUL 2>&1
 if %ERRORLEVEL% EQU 0 (
     set PYTHON_CMD=python3
     goto :start_server
 )
 
-where python 1>NUL 2>&1
+REM Zkus python (ale ověř že to není jen Windows Store alias)
+python --version >NUL 2>&1
 if %ERRORLEVEL% EQU 0 (
     set PYTHON_CMD=python
     goto :start_server
 )
 
-echo ERROR: Python not found!
-echo Install Python from: https://www.python.org/downloads/
+REM Python nenalezen
+echo.
+echo ========================================
+echo   ERROR: Python not found!
+echo ========================================
+echo.
+echo Please install Python from:
+echo   https://www.python.org/downloads/
+echo.
+echo Make sure to check "Add Python to PATH"
+echo during installation!
+echo.
 pause
 exit /b 1
 
@@ -34,7 +55,7 @@ REM Spuštění serveru na pozadí
 start /B %PYTHON_CMD% simple-cors-http-server.py
 
 REM Počkej 2 sekundy než server nastartuje
-timeout /t 2 /nobreak 1>NUL 2>&1
+timeout /t 2 /nobreak >NUL 2>&1
 
 echo [2/3] Opening browser...
 
