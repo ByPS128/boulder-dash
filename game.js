@@ -96,7 +96,9 @@ const FIREFLY_ANIMATION = "firefly_anim"
 const BUTTERFLY_ANIMATION = "butterfly_anim"
 const DIAMOND_ANIMATION = "diamond_anim"
 const EXPLOSION_ANIMATION = "explosion_anim"
-const IDDLE_ANIMATION = "iddle_anim"
+const IDDLE_ANIMATION_1 = "iddle_anim_1"
+const IDDLE_ANIMATION_2 = "iddle_anim_2"
+const IDDLE_ANIMATION_3 = "iddle_anim_3"
 const RUN_LEFT_ANIMATION = "runLeft_anim"
 const RUN_RIGHT_ANIMATION = "runRight_anim"
 const BORN_ANIMATION = "born_anim"
@@ -108,8 +110,16 @@ loadSprite(SPRITES_BOULDER_DASH, SPRITE_FILENAME, {
     sliceX: 10,
     sliceY: 13,
     anims: {
-        iddle_anim: {
+        iddle_anim_1: {
             from: 0,
+            to: 0,
+        },
+        iddle_anim_2: {
+            from: 0,
+            to: 2,
+        },
+        iddle_anim_3: {
+            from: 3,
             to: 6,
         },
         runLeft_anim: {
@@ -264,7 +274,7 @@ scene("game", () => {
                 position: VEC_ZERO,
                 direction: VEC_ZERO,
                 lastSideAnim: RUN_RIGHT_ANIMATION,
-                currentAnim: IDDLE_ANIMATION,
+                currentAnim: IDDLE_ANIMATION_1,
                 isDead: false,
                 pushAttempts: 0,
             },
@@ -360,7 +370,7 @@ scene("game", () => {
             destroy(spawn)
             rockford.hidden = false
             rockford.animSpeed = 0.3
-            rockford.play(IDDLE_ANIMATION)
+            rockford.play(IDDLE_ANIMATION_1)
             playing = true
         }
     });
@@ -638,8 +648,8 @@ scene("game", () => {
             },
             setIddle() {
                 this.animSpeed = 0.2
-                this.currentAnim = IDDLE_ANIMATION
-                this.play(IDDLE_ANIMATION)
+                this.currentAnim = IDDLE_ANIMATION_1
+                this.play(IDDLE_ANIMATION_1)
             },
             canPush() {
                 if (randomInteger(0, 5) > 1 || rockford.pushAttempts < 2) {
@@ -726,7 +736,9 @@ scene("game", () => {
     function moveRockford() {
         // is rockford iddle?
         if (rockford.direction.eq(VEC_ZERO)) {
-            if (rockford.lastSideAnim != IDDLE_ANIMATION) {
+            if (rockford.lastSideAnim != IDDLE_ANIMATION_1 
+                && rockford.lastSideAnim != IDDLE_ANIMATION_2 
+                && rockford.lastSideAnim != IDDLE_ANIMATION_3) {
                 rockford.setIddle()
             }
 
