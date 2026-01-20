@@ -159,7 +159,7 @@ export function loadGameSprites(k: KAPLAYCtx): void {
         from: DIAMOND_FRAME,
         to: DIAMOND_FRAME + 7,
         loop: true,
-        speed: 16
+        speed: 24
       }
     }
   } as LoadSpriteOpt)
