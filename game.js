@@ -771,7 +771,7 @@ scene("game", () => {
 
 
         if (rockford.direction.eq(DIR_LEFT)) {
-            if (obj != null && boulder.is(BOULDER_TAG)) {
+            if (obj != null && obj.is(BOULDER_TAG)) {
                 var boulder = obj
                 var nextToBoulder = items[rockford.position.y][rockford.position.x - 2]
                 if (nextToBoulder != null) {
@@ -800,7 +800,7 @@ scene("game", () => {
             }
 
         } else if (rockford.direction.eq(DIR_RIGHT)) {
-            if (obj != null && boulder.is(BOULDER_TAG)) {
+            if (obj != null && obj.is(BOULDER_TAG)) {
                 var boulder = obj
                 var nextToBoulder = items[rockford.position.y][rockford.position.x + 2]
                 if (nextToBoulder != null) {
