@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Run configurations (keep only the specific run config)
+!.run/
+.run/*
+!.run/Boulder Dash.run.xml
+
+# OS
+.DS_Store
+Thumbs.db
