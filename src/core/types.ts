@@ -99,3 +99,41 @@ export const isEnemy = (e: CellEntity | null): e is EnemyEntity =>
   !!e && (e.kind === CellKind.Firefly || e.kind === CellKind.Butterfly);
 
 export const isPlayer = (e: CellEntity | null): e is PlayerEntity => !!e && e.kind === CellKind.Player;
+
+// ============================================================================
+// Difficulty System (prepared for future)
+// ============================================================================
+
+export enum Difficulty {
+  EASY = "easy",
+  NORMAL = "normal",
+  HARD = "hard",
+}
+
+export interface DifficultySettings {
+  allowPause: boolean; // Easy: true, Normal/Hard: false
+  timeMultiplier: number; // Easy: 1.5, Normal: 1.0, Hard: 0.75
+  diamondsMultiplier: number; // Easy: 0.8, Normal: 1.0, Hard: 1.2
+  label: string;
+}
+
+export const DIFFICULTY_CONFIG: Record<Difficulty, DifficultySettings> = {
+  [Difficulty.EASY]: {
+    allowPause: true,
+    timeMultiplier: 1.5,
+    diamondsMultiplier: 0.8,
+    label: "Easy",
+  },
+  [Difficulty.NORMAL]: {
+    allowPause: false,
+    timeMultiplier: 1.0,
+    diamondsMultiplier: 1.0,
+    label: "Normal",
+  },
+  [Difficulty.HARD]: {
+    allowPause: false,
+    timeMultiplier: 0.75,
+    diamondsMultiplier: 1.2,
+    label: "Hard",
+  },
+};

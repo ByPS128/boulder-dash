@@ -14,7 +14,25 @@ import {
   isEnemy,
   isMoveable,
   isPlayer,
+  Difficulty,
+  DIFFICULTY_CONFIG,
 } from "../core/types";
+import { CaveDefinition } from "../core/CaveDefinition";
+import { CaveLoader } from "../levels/CaveLoader";
+import { sessionStats } from "../core/SessionStats";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { GameOverData } from "./GameOverScene";
+
+// Game states
+enum GameState {
+  SPAWNING = "spawning",
+  PLAYING = "playing",
+  PAUSED = "paused",
+  RESTART_CONFIRM = "restart_confirm",
+  QUIT_CONFIRM = "quit_confirm",
+  DEAD = "dead",
+  VICTORY = "victory",
+}
 
 const BOARD_WIDTH = 40;
 const BOARD_HEIGHT = 24;
@@ -55,43 +73,10 @@ const ANIMS = {
   DIAMOND: "diamond_anim",
 } as const;
 
-const LEVEL_CFG = {
-  diamondsNeeded: 12,
-  diamondValue: 10,
-  diamondBonusValue: 15,
-} as const;
-
 // Extra mechanics (Boulder Dash-like)
 const MAGIC_WALL_ACTIVE_TICKS = 200;
 const AMOEBA_MAX_SIZE = 200;
 const AMOEBA_GROW_CHANCE = 0.25;
-
-// Active map (keeps your current default)
-const MAP: string[] = [
-  "                                        ",
-  "========================================",
-  "=...... ..+.* .....*.*....... ....*....=",
-  "=.*S*...... .........*+..*.... ..... ..=",
-  "=.......... ..*.....*.*..*........*....=",
-  "=*.**.........*......*..*....*...*.....=",
-  "=*. *......... *..*........*......*.**.=",
-  "=... ..*........*.....*. *........*.**.=",
-  "=------------------------------...*..*.=",
-  "=. ...*..+. ..*.*..........+.*+...... .=",
-  "=..+.....*..... ........** *..*....*...=",
-  "=...*..*.*..............* .*..*........=",
-  "=.*.....*........***.......*.. .+....*.=",
-  "=.+.. ..*.  .....*.*+..+....*...*..+. .=",
-  "=. *..............* *..*........+.....*=",
-  "=........------------------------------=",
-  "= *.........*...+....*.....*...*.......=",
-  "= *......... *..*........*......*.**..E=",
-  "=. ..*........*.....*.  ....+...*.**...=",
-  "=....*+..*........*......*.*+......*...=",
-  "=... ..*. ..*.**.........*.*+...... ..*=",
-  "=.+.... ..... ......... .*..*........*.=",
-  "========================================",
-];
 
 const FIREFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.DOWN, DIR.RIGHT, DIR.UP];
 const BUTTERFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.UP, DIR.RIGHT, DIR.DOWN];
@@ -132,21 +117,41 @@ export class GameScene extends Phaser.Scene {
   // reservation grid (boulders/diamonds falling plans)
   private inMove: (MoveableEntity | null)[][] = [];
 
-  // Cells vacated by Rockford in the current tick (to match original tick ordering: falling objects react 1 tick later)
+  // Cells vacated by Rockford in the current tick
   private rockfordVacated: Set<string> = new Set();
 
   private player!: PlayerEntity;
   private exit!: CellEntity;
   private spawnSprite!: Phaser.GameObjects.Sprite;
-  private playing = false;
 
+  // Game state
+  private gameState: GameState = GameState.SPAWNING;
+
+  // Cave data
+  private caveNumber = 1;
+  private cave!: CaveDefinition;
+  private currentDifficulty: Difficulty = Difficulty.NORMAL;
+  private difficultySystemEnabled = false; // not yet implemented
+
+  // Game stats
   private score = 0;
   private diamondsCollected = 0;
+  private diamondsNeeded = 0;
   private exitOpened = false;
+
+  // Timer
+  private timeLimit = 0;
+  private timeRemaining = 0;
+  private gameStartTime = 0;
 
   private stepAcc = 0;
   private tickCount = 0;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+
+  // Additional keys
+  private pKey!: Phaser.Input.Keyboard.Key;
+  private rKey!: Phaser.Input.Keyboard.Key;
+  private escKey!: Phaser.Input.Keyboard.Key;
 
   private camOffset: Vec2 = V(0, 0);
   private camWantedPx: Vec2 = V(0, 0);
@@ -154,9 +159,21 @@ export class GameScene extends Phaser.Scene {
   // UI
   private scoreText!: Phaser.GameObjects.Text;
   private diamondsText!: Phaser.GameObjects.Text;
+  private caveInfoText!: Phaser.GameObjects.Text;
+  private timerText!: Phaser.GameObjects.Text;
+
+  // Dialogs
+  private activeDialog: ConfirmDialog | null = null;
+  private pauseOverlay: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super("GameScene");
+  }
+
+  init(data?: { caveNumber?: number }): void {
+    if (data?.caveNumber) {
+      this.caveNumber = data.caveNumber;
+    }
   }
 
   preload() {
@@ -167,9 +184,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // Load cave
+    const cave = CaveLoader.getCave(this.caveNumber);
+    if (!cave) {
+      console.error(`Cave ${this.caveNumber} not found!`);
+      this.scene.start("WelcomeScene");
+      return;
+    }
+    this.cave = cave;
+
+    // Setup game parameters from cave
+    this.diamondsNeeded = cave.diamondsNeeded;
+    this.timeLimit = cave.timeLimit;
+    this.timeRemaining = cave.timeLimit;
+    this.gameStartTime = Date.now() / 1000;
+
+    // Setup input
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.pKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+
     this.createAnims();
-    this.buildLevelFromMap(MAP);
+    this.buildLevelFromMap(cave.map);
 
     this.cameras.main.setBounds(0, 0, BOARD_WIDTH * TILE, BOARD_HEIGHT * TILE);
     this.cameras.main.setZoom(1);
@@ -182,12 +219,31 @@ export class GameScene extends Phaser.Scene {
     this.markBouldersToMove();
     this.markFirefliesToMove();
     this.markButterfliesToMove();
+
+    // Setup key listeners
+    this.setupKeyListeners();
   }
 
   update(_time: number, deltaMs: number) {
     const delta = deltaMs / 1000;
-    this.stepAcc += delta;
 
+    // Update timer (only when playing)
+    if (this.gameState === GameState.PLAYING) {
+      this.updateTimer(delta);
+    }
+
+    // Don't update game logic when paused or in dialogs
+    if (
+      this.gameState === GameState.PAUSED ||
+      this.gameState === GameState.RESTART_CONFIRM ||
+      this.gameState === GameState.QUIT_CONFIRM ||
+      this.gameState === GameState.DEAD ||
+      this.gameState === GameState.VICTORY
+    ) {
+      return;
+    }
+
+    this.stepAcc += delta;
     this.updateCamera(delta);
 
     if (this.stepAcc >= SPEED) {
@@ -282,13 +338,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createUI() {
-    this.scoreText = this.add
-      .text(4, 4, "Score: 0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
+    // Cave info
+    this.caveInfoText = this.add
+      .text(4, 4, `Cave ${this.caveNumber}: ${this.cave.name}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffff00",
+      })
       .setScrollFactor(0)
       .setDepth(1000);
 
+    // Timer
+    this.timerText = this.add
+      .text(200, 4, `Time: ${this.timeLimit}s`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    // Diamonds
     this.diamondsText = this.add
-      .text(120, 4, `Diamonds: 0/${LEVEL_CFG.diamondsNeeded}`, {
+      .text(300, 4, `Diamonds: 0/${this.diamondsNeeded}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    // Score
+    this.scoreText = this.add
+      .text(4, 20, "Score: 0", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#ffffff",
@@ -397,7 +479,7 @@ export class GameScene extends Phaser.Scene {
         this.player.hidden = false;
         this.player.sprite!.setVisible(true);
         this.player.sprite!.play(ANIMS.IDLE1);
-        this.playing = true;
+        this.gameState = GameState.PLAYING;
       }
     });
 
@@ -483,7 +565,7 @@ export class GameScene extends Phaser.Scene {
 
     this.processAmoeba();
 
-    if (this.playing) {
+    if (this.gameState === GameState.PLAYING) {
       this.processRockfordCollisionsWithEnemies();
       this.processEnemyCollisionsWithAmoeba();
     }
@@ -516,7 +598,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private moveRockford() {
-    if (!this.playing || this.player.hidden || this.player.isDead) return;
+    if (this.gameState !== GameState.PLAYING || this.player.hidden || this.player.isDead) return;
 
     let dir = DIR.ZERO;
     if (this.cursors.left?.isDown) dir = DIR.LEFT;
@@ -591,9 +673,11 @@ const belowBoulder = addV(target, DIR.DOWN);
     if (obj && obj.kind === CellKind.Diamond) {
       obj.sprite?.destroy();
       this.diamondsCollected++;
-      this.score += LEVEL_CFG.diamondValue;
+      // Score depends on whether exit is open
+      const diamondValue = this.exitOpened ? this.cave.diamondBonusValue : this.cave.diamondValue;
+      this.score += diamondValue;
       this.updateUI();
-      if (!this.exitOpened && this.diamondsCollected >= LEVEL_CFG.diamondsNeeded) {
+      if (!this.exitOpened && this.diamondsCollected >= this.diamondsNeeded) {
         this.exitOpened = true;
         this.exit.sprite?.play(ANIMS.EXIT_OPEN);
       }
@@ -601,8 +685,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     // Enter exit
     if (obj && obj.kind === CellKind.Exit && this.exitOpened) {
-      // Minimal: restart scene
-      this.scene.restart();
+      this.onVictory();
       return;
     }
 
@@ -1102,14 +1185,14 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private boomRockford() {
-    this.playing = false;
+    this.gameState = GameState.DEAD;
     this.player.isDead = true;
     const pos = this.player.pos;
     this.player.sprite?.destroy();
     this.setCell(pos.x, pos.y, null);
     this.boom(pos, "standard");
-    // quick restart after short delay (matches "dead" feel)
-    this.time.delayedCall(600, () => this.scene.restart());
+    // Show death dialog
+    this.showDeathDialog();
   }
 
   private boom(center: Vec2, explosionType: "standard" | "butterfly") {
@@ -1155,7 +1238,19 @@ const belowBoulder = addV(target, DIR.DOWN);
 
   private updateUI() {
     this.scoreText.setText(`Score: ${this.score}`);
-    this.diamondsText.setText(`Diamonds: ${this.diamondsCollected}/${LEVEL_CFG.diamondsNeeded}`);
+    this.diamondsText.setText(
+      `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`
+    );
+    this.timerText.setText(`Time: ${Math.max(0, Math.floor(this.timeRemaining))}s`);
+
+    // Change timer color when low
+    if (this.timeRemaining <= 30) {
+      this.timerText.setColor("#ff0000");
+    } else if (this.timeRemaining <= 60) {
+      this.timerText.setColor("#ffaa00");
+    } else {
+      this.timerText.setColor("#00ff00");
+    }
   }
 
   // Camera
@@ -1185,5 +1280,325 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.calcWantedCamPos();
     }
     this.cameras.main.centerOn(this.camWantedPx.x, this.camWantedPx.y);
+  }
+
+  // ============================================================================
+  // New methods for refactored game flow
+  // ============================================================================
+
+  private setupKeyListeners(): void {
+    this.pKey.on("down", () => this.handlePauseKey());
+    this.rKey.on("down", () => this.handleRestartKey());
+    this.escKey.on("down", () => this.handleEscKey());
+  }
+
+  private updateTimer(delta: number): void {
+    this.timeRemaining -= delta;
+    this.updateUI();
+
+    if (this.timeRemaining <= 0) {
+      this.timeRemaining = 0;
+      this.onTimeUp();
+    }
+  }
+
+  private onTimeUp(): void {
+    this.gameState = GameState.DEAD;
+    this.player.isDead = true;
+    this.showDeathDialog("Time's up!");
+  }
+
+  private handlePauseKey(): void {
+    if (
+      this.gameState !== GameState.PLAYING &&
+      this.gameState !== GameState.PAUSED
+    ) {
+      return;
+    }
+
+    if (this.gameState === GameState.PAUSED) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  private handleRestartKey(): void {
+    if (
+      this.gameState !== GameState.PLAYING &&
+      this.gameState !== GameState.PAUSED
+    ) {
+      return;
+    }
+
+    this.showRestartConfirm();
+  }
+
+  private handleEscKey(): void {
+    if (
+      this.gameState !== GameState.PLAYING &&
+      this.gameState !== GameState.PAUSED
+    ) {
+      return;
+    }
+
+    this.showQuitConfirm();
+  }
+
+  private pauseGame(): void {
+    this.gameState = GameState.PAUSED;
+    this.createPauseOverlay();
+  }
+
+  private resumeGame(): void {
+    this.gameState = GameState.PLAYING;
+    this.destroyPauseOverlay();
+  }
+
+  private createPauseOverlay(): void {
+    const width = 300;
+    const height = 200;
+    const x = this.cameras.main.width / 2 - width / 2;
+    const y = this.cameras.main.height / 2 - height / 2;
+
+    this.pauseOverlay = this.add.container(x, y).setDepth(9999);
+    this.pauseOverlay.setScrollFactor(0);
+
+    const bg = this.add
+      .rectangle(0, 0, width, height, 0x000000, 0.9)
+      .setOrigin(0, 0);
+    const border = this.add
+      .rectangle(0, 0, width, height, 0xffffff, 0)
+      .setStrokeStyle(2, 0xffffff)
+      .setOrigin(0, 0);
+
+    this.pauseOverlay.add(bg);
+    this.pauseOverlay.add(border);
+
+    let currentY = 20;
+
+    const title = this.add
+      .text(width / 2, currentY, "⏸ PAUSED ⏸", {
+        fontFamily: "monospace",
+        fontSize: "20px",
+        color: "#ffff00",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(title);
+    currentY += 40;
+
+    const resume = this.add
+      .text(width / 2, currentY, "Press P to resume", {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(resume);
+    currentY += 30;
+
+    const timeText = this.add
+      .text(width / 2, currentY, `Time: ${Math.floor(this.timeRemaining)}s / ${this.timeLimit}s`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#cccccc",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(timeText);
+    currentY += 20;
+
+    const diamondText = this.add
+      .text(width / 2, currentY, `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#cccccc",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(diamondText);
+    currentY += 20;
+
+    const scoreText = this.add
+      .text(width / 2, currentY, `Score: ${this.score}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#cccccc",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(scoreText);
+    currentY += 35;
+
+    const actions = this.add
+      .text(width / 2, currentY, "R - Restart   ESC - Quit", {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#888888",
+      })
+      .setOrigin(0.5, 0);
+    this.pauseOverlay.add(actions);
+  }
+
+  private destroyPauseOverlay(): void {
+    if (this.pauseOverlay) {
+      this.pauseOverlay.destroy();
+      this.pauseOverlay = null;
+    }
+  }
+
+  private showRestartConfirm(): void {
+    const wasPlaying = this.gameState === GameState.PLAYING;
+    this.gameState = GameState.RESTART_CONFIRM;
+
+    if (wasPlaying) {
+      this.destroyPauseOverlay();
+    }
+
+    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+
+    this.activeDialog = new ConfirmDialog(this, {
+      title: "⚠️ RESTART LEVEL?",
+      message: "You will lose all progress!",
+      details: [
+        `Time played: ${timeSpent}s`,
+        `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`,
+        `Score: ${this.score}`,
+      ],
+      confirmText: "Press Y to restart",
+      cancelText: "Press N to continue",
+      onYes: () => this.restartLevel(),
+      onNo: () => {
+        this.activeDialog = null;
+        if (wasPlaying) {
+          this.resumeGame();
+        } else {
+          this.pauseGame();
+        }
+      },
+    });
+  }
+
+  private showQuitConfirm(): void {
+    const wasPlaying = this.gameState === GameState.PLAYING;
+    this.gameState = GameState.QUIT_CONFIRM;
+
+    if (wasPlaying) {
+      this.destroyPauseOverlay();
+    }
+
+    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+
+    this.activeDialog = new ConfirmDialog(this, {
+      title: "⚠️ QUIT LEVEL?",
+      message: "You will lose all progress!",
+      details: [
+        `Time played: ${timeSpent}s`,
+        `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`,
+        `Score: ${this.score}`,
+      ],
+      confirmText: "Press Y to quit",
+      cancelText: "Press N to continue",
+      onYes: () => this.quitLevel(),
+      onNo: () => {
+        this.activeDialog = null;
+        if (wasPlaying) {
+          this.resumeGame();
+        } else {
+          this.pauseGame();
+        }
+      },
+    });
+  }
+
+  private restartLevel(): void {
+    this.scene.restart({ caveNumber: this.caveNumber });
+  }
+
+  private quitLevel(): void {
+    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+
+    sessionStats.addAttempt({
+      caveNumber: this.caveNumber,
+      result: "quit",
+      timeSpent,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore: this.score,
+      difficulty: this.currentDifficulty,
+      timestamp: new Date(),
+    });
+
+    this.scene.start("WelcomeScene", { lastCave: this.caveNumber });
+  }
+
+  private showDeathDialog(reason?: string): void {
+    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+
+    sessionStats.addAttempt({
+      caveNumber: this.caveNumber,
+      result: "death",
+      timeSpent,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore: this.score,
+      difficulty: this.currentDifficulty,
+      timestamp: new Date(),
+    });
+
+    const data: GameOverData = {
+      result: "death",
+      caveNumber: this.caveNumber,
+      caveName: this.cave.name,
+      timeSpent,
+      timeRemaining: this.timeRemaining,
+      timeLimit: this.timeLimit,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore: this.score,
+      timeBonus: 0,
+    };
+
+    this.time.delayedCall(600, () => {
+      this.scene.start("GameOverScene", data);
+    });
+  }
+
+  private onVictory(): void {
+    this.gameState = GameState.VICTORY;
+
+    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeBonus = Math.max(0, Math.floor(this.timeRemaining * this.cave.timeBonus));
+    const finalScore = this.score + timeBonus;
+
+    sessionStats.addAttempt({
+      caveNumber: this.caveNumber,
+      result: "victory",
+      timeSpent,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore,
+      difficulty: this.currentDifficulty,
+      timestamp: new Date(),
+    });
+
+    const data: GameOverData = {
+      result: "victory",
+      caveNumber: this.caveNumber,
+      caveName: this.cave.name,
+      timeSpent,
+      timeRemaining: this.timeRemaining,
+      timeLimit: this.timeLimit,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore,
+      timeBonus,
+    };
+
+    this.time.delayedCall(600, () => {
+      this.scene.start("GameOverScene", data);
+    });
   }
 }

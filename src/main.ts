@@ -1,5 +1,8 @@
 import Phaser from "phaser";
+import { WelcomeScene } from "./scenes/WelcomeScene";
 import { GameScene } from "./scenes/GameScene";
+import { GameOverScene } from "./scenes/GameOverScene";
+import { CaveLoader } from "./levels/CaveLoader";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -20,7 +23,14 @@ const config: Phaser.Types.Core.GameConfig = {
     zoom: 1, // důležité: měnit jen na CELÁ čísla (2,3,4…), nikdy 1.5 apod.
   },
   fps: { target: 60, forceSetTimeOut: true },
-  scene: [GameScene],
+  scene: [WelcomeScene, GameScene, GameOverScene],
 };
 
-new Phaser.Game(config);
+// Load caves before starting the game
+CaveLoader.loadAll().then(() => {
+  console.log("Caves loaded, starting game...");
+  new Phaser.Game(config);
+}).catch((error) => {
+  console.error("Failed to load caves:", error);
+  alert("Failed to load game levels. Please refresh the page.");
+});
