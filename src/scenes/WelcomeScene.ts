@@ -47,9 +47,9 @@ export class WelcomeScene extends Phaser.Scene {
     // Title with Rockford sprites
     const titleY = y + 12; // center vertically with text
     
-    // Left Rockford
+    // Left Rockford - moved to the edge
     this.rockfordLeftSprite = this.add
-      .sprite(width / 2 - 110, titleY, "bd", 0)
+      .sprite(width / 2 - 170, titleY, "bd", 0)
       .setOrigin(0.5, 0.5)
       .setScale(1.5);
     
@@ -62,9 +62,9 @@ export class WelcomeScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
     
-    // Right Rockford
+    // Right Rockford - moved to the edge
     this.rockfordRightSprite = this.add
-      .sprite(width / 2 + 110, titleY, "bd", 0)
+      .sprite(width / 2 + 170, titleY, "bd", 0)
       .setOrigin(0.5, 0.5)
       .setScale(1.5);
     

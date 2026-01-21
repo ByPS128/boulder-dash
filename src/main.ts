@@ -26,11 +26,27 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [WelcomeScene, GameScene, GameOverScene],
 };
 
-// Load caves before starting the game
-CaveLoader.loadAll().then(() => {
-  console.log("Caves loaded, starting game...");
-  new Phaser.Game(config);
-}).catch((error) => {
-  console.error("Failed to load caves:", error);
-  alert("Failed to load game levels. Please refresh the page.");
-});
+// Wait for Atari font to load, then load caves and start game
+async function initGame() {
+  try {
+    // Wait for font to be ready
+    await document.fonts.ready;
+    console.log("Atari font loaded successfully");
+    
+    // Load font explicitly if not loaded
+    await document.fonts.load('11px Atari');
+    console.log("Atari font 11px loaded");
+    
+    // Load caves
+    await CaveLoader.loadAll();
+    console.log("Caves loaded, starting game...");
+    
+    // Start Phaser
+    new Phaser.Game(config);
+  } catch (error) {
+    console.error("Failed to initialize game:", error);
+    alert("Failed to load game. Please refresh the page.");
+  }
+}
+
+initGame();

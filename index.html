@@ -14,18 +14,31 @@
       /* Atari 800 XL Font - authentic retro look with Czech diacritics support */
       @font-face {
         font-family: 'Atari';
-        src: url('resources/EightBit-Atari-Fonts-2/Truetype/EightBit Atari-Regular.ttf') format('truetype');
+        src: url('resources/atari.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
+        font-display: block;
       }
       
-      html, body { margin: 0; height: 100%; background: #000; }
+      html, body { margin: 0; height: 100%; background: #000; font-family: 'Atari', monospace; }
       #app { width: 100%; height: 100%; }
       canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
     </style>
+    
+    <!-- Preload font before Phaser starts -->
+    <link rel="preload" href="resources/atari.ttf" as="font" type="font/ttf" crossorigin>
   </head>
   <body>
     <div id="app"></div>
+    
+    <!-- Force font load before starting Phaser -->
+    <script>
+      // Wait for font to load before starting the game
+      document.fonts.ready.then(() => {
+        console.log('Atari font loaded successfully');
+      });
+    </script>
+    
     <script type="module" src="src/main.ts"></script>
   </body>
 </html>
