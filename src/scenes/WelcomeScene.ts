@@ -15,6 +15,11 @@ export class WelcomeScene extends Phaser.Scene {
   private rightKey!: Phaser.Input.Keyboard.Key;
   private enterKey!: Phaser.Input.Keyboard.Key;
 
+  private rockfordLeftSprite!: Phaser.GameObjects.Sprite;
+  private rockfordRightSprite!: Phaser.GameObjects.Sprite;
+  private idleAnimIndex = 0;
+  private idleAnimTimer = 0;
+
   constructor() {
     super("WelcomeScene");
   }
@@ -25,26 +30,54 @@ export class WelcomeScene extends Phaser.Scene {
     }
   }
 
+  preload() {
+    this.load.spritesheet("bd", "resources/spritesheet_A.png", {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+  }
+
   create(): void {
+    this.createAnims();
+
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
     let y = 20;
 
-    // Title
+    // Title with Rockford sprites
+    const titleY = y + 12; // center vertically with text
+    
+    // Left Rockford
+    this.rockfordLeftSprite = this.add
+      .sprite(width / 2 - 110, titleY, "bd", 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(1.5);
+    
+    // Title text
     this.add
-      .text(width / 2, y, "🎮 BOULDER DASH 🎮", {
-        fontFamily: "monospace",
+      .text(width / 2, y, "BOULDER DASH", {
+        fontFamily: "Atari",
         fontSize: "24px",
         color: "#ffff00",
       })
       .setOrigin(0.5, 0);
+    
+    // Right Rockford
+    this.rockfordRightSprite = this.add
+      .sprite(width / 2 + 110, titleY, "bd", 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(1.5);
+    
+    // Start idle animation cycle
+    this.startIdleAnimationCycle();
+    
     y += 50;
 
     // Cave selector
     y += 20;
     this.add
       .text(width / 2, y, "← SELECT CAVE →", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#aaaaaa",
       })
@@ -53,7 +86,7 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.caveNumberText = this.add
       .text(width / 2, y, "", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "20px",
         color: "#ffffff",
       })
@@ -62,7 +95,7 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.caveInfoText = this.add
       .text(width / 2, y, "", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#cccccc",
       })
@@ -71,7 +104,7 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.bestScoreText = this.add
       .text(width / 2, y, "", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#00ff00",
       })
@@ -81,7 +114,7 @@ export class WelcomeScene extends Phaser.Scene {
     // Difficulty (disabled for now)
     this.add
       .text(width / 2, y, "Difficulty: Normal", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#888888",
       })
@@ -89,7 +122,7 @@ export class WelcomeScene extends Phaser.Scene {
     y += 15;
     this.add
       .text(width / 2, y, "(Coming soon!)", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "10px",
         color: "#666666",
       })
@@ -104,7 +137,7 @@ export class WelcomeScene extends Phaser.Scene {
     // Controls section
     this.add
       .text(width / 2, y, "CONTROLS", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#ffff00",
       })
@@ -116,14 +149,14 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.add
       .text(controlsX, y, "⬅️ ➡️ ⬆️ ⬇️", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#ffffff",
       })
       .setOrigin(0, 0);
     this.add
       .text(controlsX + 100, y, "Move Rockford", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -132,14 +165,14 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.add
       .text(controlsX, y, "P", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#ffffff",
       })
       .setOrigin(0, 0);
     this.add
       .text(controlsX + 100, y, "Pause/Resume (Easy mode only)", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -148,14 +181,14 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.add
       .text(controlsX, y, "R", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#ffffff",
       })
       .setOrigin(0, 0);
     this.add
       .text(controlsX + 100, y, "Restart level (with confirmation)", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -164,14 +197,14 @@ export class WelcomeScene extends Phaser.Scene {
 
     this.add
       .text(controlsX, y, "ESC", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#ffffff",
       })
       .setOrigin(0, 0);
     this.add
       .text(controlsX + 100, y, "Quit level (with confirmation)", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -186,7 +219,7 @@ export class WelcomeScene extends Phaser.Scene {
     // Start instruction
     this.add
       .text(width / 2, y, "Press ENTER to start", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "16px",
         color: "#00ff00",
       })
@@ -248,5 +281,52 @@ export class WelcomeScene extends Phaser.Scene {
 
   private startGame(): void {
     this.scene.start("GameScene", { caveNumber: this.selectedCave });
+  }
+
+  private createAnims() {
+    // Idle animations for Rockford (3 variants)
+    if (!this.anims.exists("iddle_anim_1")) {
+      this.anims.create({
+        key: "iddle_anim_1",
+        frames: [{ key: "bd", frame: 0 }],
+        frameRate: 1,
+        repeat: 0,
+      });
+    }
+    if (!this.anims.exists("iddle_anim_2")) {
+      this.anims.create({
+        key: "iddle_anim_2",
+        frames: this.anims.generateFrameNumbers("bd", { start: 0, end: 2 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists("iddle_anim_3")) {
+      this.anims.create({
+        key: "iddle_anim_3",
+        frames: this.anims.generateFrameNumbers("bd", { start: 3, end: 6 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+  }
+
+  private startIdleAnimationCycle(): void {
+    const idleAnims = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
+    
+    const playNextIdle = () => {
+      const animKey = idleAnims[this.idleAnimIndex];
+      this.rockfordLeftSprite.play(animKey);
+      this.rockfordRightSprite.play(animKey);
+      
+      // Cycle to next animation after 3-5 seconds
+      const delay = Phaser.Math.Between(3000, 5000);
+      this.time.delayedCall(delay, () => {
+        this.idleAnimIndex = (this.idleAnimIndex + 1) % idleAnims.length;
+        playNextIdle();
+      });
+    };
+    
+    playNextIdle();
   }
 }

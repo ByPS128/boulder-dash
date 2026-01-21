@@ -55,7 +55,7 @@ export class ConfirmDialog {
     // Title
     const title = this.scene.add
       .text(width / 2, currentY, this.config.title, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "18px",
         color: "#ffff00",
         align: "center",
@@ -67,7 +67,7 @@ export class ConfirmDialog {
     // Message
     const message = this.scene.add
       .text(width / 2, currentY, this.config.message, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#ffffff",
         align: "center",
@@ -82,7 +82,7 @@ export class ConfirmDialog {
 
       const detailsTitle = this.scene.add
         .text(width / 2, currentY, "Current progress:", {
-          fontFamily: "monospace",
+          fontFamily: "Atari",
           fontSize: "12px",
           color: "#aaaaaa",
           align: "center",
@@ -94,7 +94,7 @@ export class ConfirmDialog {
       this.config.details.forEach((detail) => {
         const detailText = this.scene.add
           .text(width / 2, currentY, detail, {
-            fontFamily: "monospace",
+            fontFamily: "Atari",
             fontSize: "12px",
             color: "#cccccc",
             align: "center",
@@ -118,7 +118,7 @@ export class ConfirmDialog {
     const confirmText = this.config.confirmText || "Press Y to confirm";
     const confirm = this.scene.add
       .text(width / 2, currentY, confirmText, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#00ff00",
         align: "center",
@@ -131,7 +131,7 @@ export class ConfirmDialog {
     const cancelText = this.config.cancelText || "Press N to cancel";
     const cancel = this.scene.add
       .text(width / 2, currentY, cancelText, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#ff0000",
         align: "center",

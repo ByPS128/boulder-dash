@@ -162,6 +162,14 @@ export class GameScene extends Phaser.Scene {
   private caveInfoText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
 
+  // Death tracking
+  private deathReason: string = "";
+
+  // Idle animation rotation
+  private idleAnimIndex = 0;
+  private idleStartTime = 0;
+  private readonly IDLE_ANIM_DURATION = 3; // seconds per idle animation
+
   // Dialogs
   private activeDialog: ConfirmDialog | null = null;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
@@ -338,41 +346,42 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createUI() {
+    // All UI on single top row to avoid overflow into game area
     // Cave info
     this.caveInfoText = this.add
-      .text(4, 4, `Cave ${this.caveNumber}: ${this.cave.name}`, {
-        fontFamily: "monospace",
-        fontSize: "12px",
+      .text(4, 4, `C${this.caveNumber}:${this.cave.name}`, {
+        fontFamily: "Atari",
+        fontSize: "11px",
         color: "#ffff00",
       })
       .setScrollFactor(0)
       .setDepth(1000);
 
-    // Timer
-    this.timerText = this.add
-      .text(200, 4, `Time: ${this.timeLimit}s`, {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-      })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Diamonds
+    // Diamonds (compact format)
     this.diamondsText = this.add
-      .text(300, 4, `Diamonds: 0/${this.diamondsNeeded}`, {
-        fontFamily: "monospace",
-        fontSize: "12px",
+      .text(150, 4, `D:0/${this.diamondsNeeded}`, {
+        fontFamily: "Atari",
+        fontSize: "11px",
         color: "#ffffff",
       })
       .setScrollFactor(0)
       .setDepth(1000);
 
-    // Score
+    // Timer (compact)
+    this.timerText = this.add
+      .text(220, 4, `T:${this.timeLimit}s`, {
+        fontFamily: "Atari",
+        fontSize: "11px",
+        color: "#00ff00",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    // Score (compact)
     this.scoreText = this.add
-      .text(4, 20, "Score: 0", {
-        fontFamily: "monospace",
-        fontSize: "12px",
+      .text(300, 4, "S:0", {
+        fontFamily: "Atari",
+        fontSize: "11px",
         color: "#ffffff",
       })
       .setScrollFactor(0)
@@ -608,8 +617,8 @@ export class GameScene extends Phaser.Scene {
 
     this.player.direction = dir;
     if (eqV(dir, DIR.ZERO)) {
-      // idle
-      this.player.sprite!.play(ANIMS.IDLE1, true);
+      // idle - use rotation of 3 different idle animations
+      this.updateIdleAnimation();
       return;
     }
 
@@ -662,7 +671,7 @@ const belowBoulder = addV(target, DIR.DOWN);
     }
 
     if (this.isBlockedForRockford(obj)) {
-      this.player.sprite!.play(ANIMS.IDLE1, true);
+      this.updateIdleAnimation();
       return;
     }
 
@@ -701,6 +710,10 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private playRockfordAnimByDir(dir: Vec2) {
+    // Reset idle animation timer when moving
+    this.idleStartTime = Date.now() / 1000;
+    this.idleAnimIndex = 0;
+    
     if (eqV(dir, DIR.LEFT)) {
       this.player.lastSideAnim = ANIMS.RUN_L;
       this.player.sprite!.play(ANIMS.RUN_L, true);
@@ -709,6 +722,33 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.player.sprite!.play(ANIMS.RUN_R, true);
     } else if (eqV(dir, DIR.UP) || eqV(dir, DIR.DOWN)) {
       this.player.sprite!.play(this.player.lastSideAnim, true);
+    }
+  }
+
+  private updateIdleAnimation() {
+    const currentTime = Date.now() / 1000;
+    
+    // Initialize timer on first idle
+    if (this.idleStartTime === 0) {
+      this.idleStartTime = currentTime;
+      this.idleAnimIndex = 0;
+    }
+    
+    // Check if it's time to switch to next idle animation
+    const elapsed = currentTime - this.idleStartTime;
+    const newIndex = Math.floor(elapsed / this.IDLE_ANIM_DURATION) % 3;
+    
+    if (newIndex !== this.idleAnimIndex) {
+      this.idleAnimIndex = newIndex;
+      const idleAnims = [ANIMS.IDLE1, ANIMS.IDLE2, ANIMS.IDLE3];
+      this.player.sprite!.play(idleAnims[this.idleAnimIndex], true);
+    } else {
+      // Keep current animation playing
+      const idleAnims = [ANIMS.IDLE1, ANIMS.IDLE2, ANIMS.IDLE3];
+      const currentAnim = this.player.sprite!.anims.getName();
+      if (currentAnim !== idleAnims[this.idleAnimIndex]) {
+        this.player.sprite!.play(idleAnims[this.idleAnimIndex], true);
+      }
     }
   }
 
@@ -832,6 +872,14 @@ const belowBoulder = addV(target, DIR.DOWN);
     if (!obj) return;
 
     if (obj.kind === CellKind.Player) {
+      const fallingObj = this.findFallingObjectAt(this.player.pos);
+      if (fallingObj?.kind === CellKind.Boulder) {
+        this.deathReason = "Crushed by falling boulder";
+      } else if (fallingObj?.kind === CellKind.Diamond) {
+        this.deathReason = "Crushed by falling diamond";
+      } else {
+        this.deathReason = "Crushed by falling object";
+      }
       this.boomRockford();
       return;
     }
@@ -846,6 +894,18 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.boomButterfly(obj as EnemyEntity, isChainExplosion);
       return;
     }
+  }
+
+  private findFallingObjectAt(pos: Vec2): MoveableEntity | null {
+    for (let y = 0; y < this.gridH; y++) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (obj && isMoveable(obj) && eqV(obj.pos, pos) && obj.isFalling) {
+          return obj;
+        }
+      }
+    }
+    return null;
   }
 
   private handleMagicWallDrop(m: MoveableEntity, wall: MagicWallEntity) {
@@ -1071,6 +1131,13 @@ const belowBoulder = addV(target, DIR.DOWN);
       const p = addV(this.player.pos, d);
       const obj = this.getCell(p);
       if (obj && isEnemy(obj)) {
+        if (obj.kind === CellKind.Firefly) {
+          this.deathReason = "Killed by firefly";
+        } else if (obj.kind === CellKind.Butterfly) {
+          this.deathReason = "Killed by butterfly";
+        } else {
+          this.deathReason = "Killed by enemy";
+        }
         this.boomRockford();
         return;
       }
@@ -1190,6 +1257,12 @@ const belowBoulder = addV(target, DIR.DOWN);
     const pos = this.player.pos;
     this.player.sprite?.destroy();
     this.setCell(pos.x, pos.y, null);
+    
+    // Set default reason if not already set
+    if (!this.deathReason) {
+      this.deathReason = "Killed by explosion";
+    }
+    
     this.boom(pos, "standard");
     // Show death dialog
     this.showDeathDialog();
@@ -1237,11 +1310,11 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private updateUI() {
-    this.scoreText.setText(`Score: ${this.score}`);
+    this.scoreText.setText(`S:${this.score}`);
     this.diamondsText.setText(
-      `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`
+      `D:${this.diamondsCollected}/${this.diamondsNeeded}`
     );
-    this.timerText.setText(`Time: ${Math.max(0, Math.floor(this.timeRemaining))}s`);
+    this.timerText.setText(`T:${Math.max(0, Math.floor(this.timeRemaining))}s`);
 
     // Change timer color when low
     if (this.timeRemaining <= 30) {
@@ -1305,7 +1378,8 @@ const belowBoulder = addV(target, DIR.DOWN);
   private onTimeUp(): void {
     this.gameState = GameState.DEAD;
     this.player.isDead = true;
-    this.showDeathDialog("Time's up!");
+    this.deathReason = "Time's up";
+    this.showDeathDialog();
   }
 
   private handlePauseKey(): void {
@@ -1379,7 +1453,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const title = this.add
       .text(width / 2, currentY, "⏸ PAUSED ⏸", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "20px",
         color: "#ffff00",
       })
@@ -1389,7 +1463,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const resume = this.add
       .text(width / 2, currentY, "Press P to resume", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "14px",
         color: "#ffffff",
       })
@@ -1399,7 +1473,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const timeText = this.add
       .text(width / 2, currentY, `Time: ${Math.floor(this.timeRemaining)}s / ${this.timeLimit}s`, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -1409,7 +1483,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const diamondText = this.add
       .text(width / 2, currentY, `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -1419,7 +1493,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const scoreText = this.add
       .text(width / 2, currentY, `Score: ${this.score}`, {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
       })
@@ -1429,7 +1503,7 @@ const belowBoulder = addV(target, DIR.DOWN);
 
     const actions = this.add
       .text(width / 2, currentY, "R - Restart   ESC - Quit", {
-        fontFamily: "monospace",
+        fontFamily: "Atari",
         fontSize: "11px",
         color: "#888888",
       })
@@ -1527,10 +1601,25 @@ const belowBoulder = addV(target, DIR.DOWN);
       timestamp: new Date(),
     });
 
-    this.scene.start("WelcomeScene", { lastCave: this.caveNumber });
+    const data: GameOverData = {
+      result: "quit",
+      caveNumber: this.caveNumber,
+      caveName: this.cave.name,
+      timeSpent,
+      timeRemaining: this.timeRemaining,
+      timeLimit: this.timeLimit,
+      diamondsCollected: this.diamondsCollected,
+      diamondsNeeded: this.diamondsNeeded,
+      score: this.score,
+      finalScore: this.score,
+      timeBonus: 0,
+      deathReason: "Gave up",
+    };
+
+    this.scene.start("GameOverScene", data);
   }
 
-  private showDeathDialog(reason?: string): void {
+  private showDeathDialog(): void {
     const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
 
     sessionStats.addAttempt({
@@ -1557,6 +1646,7 @@ const belowBoulder = addV(target, DIR.DOWN);
       score: this.score,
       finalScore: this.score,
       timeBonus: 0,
+      deathReason: this.deathReason,
     };
 
     this.time.delayedCall(600, () => {

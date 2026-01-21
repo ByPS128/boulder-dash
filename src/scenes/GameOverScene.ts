@@ -13,6 +13,7 @@ export interface GameOverData {
   score: number;
   finalScore: number; // including time bonus
   timeBonus: number;
+  deathReason?: string; // reason for death (only for death result)
 }
 
 /**
@@ -21,7 +22,7 @@ export interface GameOverData {
 export class GameOverScene extends Phaser.Scene {
   private data!: GameOverData;
   private spaceKey!: Phaser.Input.Keyboard.Key;
-  private enterKey!: Phaser.Input.Keyboard.Key;
+  private escKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super("GameOverScene");
@@ -49,12 +50,12 @@ export class GameOverScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     );
-    this.enterKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.ENTER
+    this.escKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ESC
     );
 
     this.spaceKey.on("down", () => this.onRetryOrNext());
-    this.enterKey.on("down", () => this.onBackToMenu());
+    this.escKey.on("down", () => this.onBackToMenu());
   }
 
   private createVictoryScreen(width: number, startY: number): void {
@@ -63,12 +64,12 @@ export class GameOverScene extends Phaser.Scene {
     // Title
     this.add
       .text(width / 2, y, "🏆 VICTORY! 🏆", {
-        fontFamily: "monospace",
-        fontSize: "28px",
+        fontFamily: "Atari",
+        fontSize: "24px",
         color: "#ffff00",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
 
     // Cave info
     this.add
@@ -77,32 +78,32 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
         {
-          fontFamily: "monospace",
-          fontSize: "16px",
+          fontFamily: "Atari",
+          fontSize: "14px",
           color: "#ffffff",
         }
       )
       .setOrigin(0.5, 0);
-    y += 40;
+    y += 30;
 
     // Stats
     this.add
       .text(width / 2, y, `Time: ${this.data.timeSpent}s / ${this.data.timeLimit}s`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(width / 2, y, `Time bonus: +${this.data.timeBonus} pts`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(
@@ -110,47 +111,47 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded}`,
         {
-          fontFamily: "monospace",
-          fontSize: "14px",
+          fontFamily: "Atari",
+          fontSize: "12px",
           color: "#cccccc",
         }
       )
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(width / 2, y, `Base score: ${this.data.score}`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 30;
+    y += 25;
 
     this.add
       .text(width / 2, y, `Final score: ${this.data.finalScore}`, {
-        fontFamily: "monospace",
-        fontSize: "18px",
+        fontFamily: "Atari",
+        fontSize: "16px",
         color: "#ffff00",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
 
     // Actions
     const nextCave = this.data.caveNumber < 20 ? this.data.caveNumber + 1 : 1;
     this.add
       .text(width / 2, y, `[SPACE] Next cave (${nextCave})`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 20;
 
     this.add
-      .text(width / 2, y, "[ENTER] Level select", {
-        fontFamily: "monospace",
-        fontSize: "14px",
+      .text(width / 2, y, "[ESC] Return to menu", {
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
@@ -162,12 +163,24 @@ export class GameOverScene extends Phaser.Scene {
     // Title
     this.add
       .text(width / 2, y, "💀 FAILED 💀", {
-        fontFamily: "monospace",
-        fontSize: "28px",
+        fontFamily: "Atari",
+        fontSize: "24px",
         color: "#ff0000",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
+
+    // Death reason
+    if (this.data.deathReason) {
+      this.add
+        .text(width / 2, y, this.data.deathReason, {
+          fontFamily: "Atari",
+          fontSize: "14px",
+          color: "#ff6666",
+        })
+        .setOrigin(0.5, 0);
+      y += 28;
+    }
 
     // Cave info
     this.add
@@ -176,23 +189,23 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
         {
-          fontFamily: "monospace",
-          fontSize: "16px",
+          fontFamily: "Atari",
+          fontSize: "14px",
           color: "#ffffff",
         }
       )
       .setOrigin(0.5, 0);
-    y += 40;
+    y += 30;
 
     // Stats
     this.add
       .text(width / 2, y, `Time played: ${this.data.timeSpent}s`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     const remaining = this.data.diamondsNeeded - this.data.diamondsCollected;
     this.add
@@ -201,37 +214,37 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded} (needed ${remaining} more)`,
         {
-          fontFamily: "monospace",
-          fontSize: "14px",
+          fontFamily: "Atari",
+          fontSize: "12px",
           color: "#ff8888",
         }
       )
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(width / 2, y, `Score: ${this.data.score}`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
 
     // Actions
     this.add
       .text(width / 2, y, "[SPACE] Retry", {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 20;
 
     this.add
-      .text(width / 2, y, "[ENTER] Level select", {
-        fontFamily: "monospace",
-        fontSize: "14px",
+      .text(width / 2, y, "[ESC] Return to menu", {
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
@@ -243,12 +256,24 @@ export class GameOverScene extends Phaser.Scene {
     // Title
     this.add
       .text(width / 2, y, "LEVEL QUIT", {
-        fontFamily: "monospace",
-        fontSize: "28px",
+        fontFamily: "Atari",
+        fontSize: "24px",
         color: "#ffaa00",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
+
+    // Quit reason
+    if (this.data.deathReason) {
+      this.add
+        .text(width / 2, y, this.data.deathReason, {
+          fontFamily: "Atari",
+          fontSize: "14px",
+          color: "#ffcc66",
+        })
+        .setOrigin(0.5, 0);
+      y += 28;
+    }
 
     // Cave info
     this.add
@@ -257,23 +282,23 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
         {
-          fontFamily: "monospace",
-          fontSize: "16px",
+          fontFamily: "Atari",
+          fontSize: "14px",
           color: "#ffffff",
         }
       )
       .setOrigin(0.5, 0);
-    y += 40;
+    y += 30;
 
     // Stats
     this.add
       .text(width / 2, y, `Time played: ${this.data.timeSpent}s`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(
@@ -281,37 +306,37 @@ export class GameOverScene extends Phaser.Scene {
         y,
         `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded}`,
         {
-          fontFamily: "monospace",
-          fontSize: "14px",
+          fontFamily: "Atari",
+          fontSize: "12px",
           color: "#cccccc",
         }
       )
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 18;
 
     this.add
       .text(width / 2, y, `Score: ${this.data.score}`, {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "12px",
         color: "#cccccc",
       })
       .setOrigin(0.5, 0);
-    y += 50;
+    y += 35;
 
     // Actions
     this.add
       .text(width / 2, y, "[SPACE] Retry", {
-        fontFamily: "monospace",
-        fontSize: "14px",
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
-    y += 22;
+    y += 20;
 
     this.add
-      .text(width / 2, y, "[ENTER] Level select", {
-        fontFamily: "monospace",
-        fontSize: "14px",
+      .text(width / 2, y, "[ESC] Return to menu", {
+        fontFamily: "Atari",
+        fontSize: "13px",
         color: "#00ff00",
       })
       .setOrigin(0.5, 0);
