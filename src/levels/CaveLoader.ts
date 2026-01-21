@@ -58,7 +58,7 @@ export class CaveLoader {
           caveNumber: i,
           name: config.name,
           width: 40,
-          height: 22,
+          height: 23, // 22 original + 1 empty row for UI space
           map: map,
           diamondsNeeded: config.diamonds,
           timeLimit: config.time,
@@ -115,7 +115,11 @@ export class CaveLoader {
       }
     });
 
-    return lines;
+    // Add empty row at the top for UI space (so UI doesn't overlap gameplay)
+    const emptyRow = " ".repeat(40); // 40 spaces
+    const linesWithUISpace = [emptyRow, ...lines];
+
+    return linesWithUISpace;
   }
 
   /**

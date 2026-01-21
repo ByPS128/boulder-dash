@@ -35,7 +35,7 @@ enum GameState {
 }
 
 const BOARD_WIDTH = 40;
-const BOARD_HEIGHT = 24;
+const BOARD_HEIGHT = 23; // 22 original + 1 empty row for UI space
 
 const VISIBLE_W = 28;
 const VISIBLE_H = 16;
