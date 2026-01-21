@@ -1,75 +1,52 @@
 @echo off
-REM Boulder Dash - Quick Start Script
+REM Boulder Dash - Quick Start Script (TypeScript + Vite version)
 
-echo ==================================
+echo =====================================
 echo   Boulder Dash - Starting...
-echo ==================================
+echo =====================================
 echo.
 
 REM Zjisti adresář scriptu
 cd /d "%~dp0"
 
-REM Kontrola Pythonu - zkus různé varianty
-set PYTHON_CMD=
-
-REM Zkus py launcher (standardní na Windows)
-py --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set PYTHON_CMD=py
-    goto :start_server
+REM Check if Node.js is installed
+where node >nul 2>nul
+if %ERRORLEVEL% NEQ 0 (
+    echo ========================================
+    echo   ERROR: Node.js is not installed!
+    echo ========================================
+    echo.
+    echo Please install Node.js from:
+    echo   https://nodejs.org/
+    echo.
+    pause
+    exit /b 1
 )
 
-REM Zkus python3
-python3 --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set PYTHON_CMD=python3
-    goto :start_server
+REM Check if dependencies are installed
+if not exist "node_modules" (
+    echo [1/3] Installing dependencies...
+    call npm install
+    if %ERRORLEVEL% NEQ 0 (
+        echo ERROR: Failed to install dependencies!
+        pause
+        exit /b 1
+    )
+    echo.
 )
 
-REM Zkus python (ale ověř že to není jen Windows Store alias)
-python --version >NUL 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set PYTHON_CMD=python
-    goto :start_server
-)
-
-REM Python nenalezen
+REM Start development server
+echo [2/3] Starting development server...
+echo Server will open at: http://localhost:8000
 echo.
-echo ========================================
-echo   ERROR: Python not found!
-echo ========================================
-echo.
-echo Please install Python from:
-echo   https://www.python.org/downloads/
-echo.
-echo Make sure to check "Add Python to PATH"
-echo during installation!
-echo.
-pause
-exit /b 1
-
-:start_server
-echo [1/3] Starting HTTP server on port 8000...
-
-REM Spuštění serveru na pozadí
-start /B %PYTHON_CMD% simple-cors-http-server.py
-
-REM Počkej 2 sekundy než server nastartuje
-timeout /t 2 /nobreak >NUL 2>&1
-
-echo [2/3] Opening browser...
-
-REM Otevři prohlížeč
-start http://localhost:8000/BoulderDash.html
-
-echo [3/3] Game started!
+echo [3/3] Opening browser...
 echo.
 echo ==================================
 echo   Game is running!
-echo   URL: http://localhost:8000/BoulderDash.html
 echo   Press Ctrl+C to stop server
 echo ==================================
 echo.
 
-REM Drž okno otevřené (server běží na pozadí)
+call npm run dev
+
 pause

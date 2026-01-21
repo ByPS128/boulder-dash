@@ -1,0 +1,1189 @@
+import Phaser from "phaser";
+import {
+  CellEntity,
+  CellKind,
+  DIR,
+  EnemyEntity,
+  MagicWallEntity,
+  MoveableEntity,
+  PlayerEntity,
+  Vec2,
+  V,
+  addV,
+  eqV,
+  isEnemy,
+  isMoveable,
+  isPlayer,
+} from "../core/types";
+
+const BOARD_WIDTH = 40;
+const BOARD_HEIGHT = 24;
+
+const VISIBLE_W = 28;
+const VISIBLE_H = 16;
+
+const TILE = 16;
+
+// Fixed-step tick (matches Kaboom version feel)
+const SPEED = 0.4;
+
+// Spritesheet frames (spritesheet_A.png)
+const FRAMES = {
+  TITAN: 30,
+  SPAWN: 31,
+  BRICKS: 32,
+  DIRT: 33,
+  BOULDER: 35,
+  DIAMOND: 40,
+  FIREFLY: 80,
+  BUTTERFLY: 90,
+  EXPLOSION: 100,
+} as const;
+
+const ANIMS = {
+  IDLE1: "iddle_anim_1",
+  IDLE2: "iddle_anim_2",
+  IDLE3: "iddle_anim_3",
+  RUN_L: "runLeft_anim",
+  RUN_R: "runRight_anim",
+  BORN: "born_anim",
+  SPAWN: "spawn_anim",
+  EXIT_OPEN: "exitOpened_anim",
+  EXPLOSION: "explosion_anim",
+  FIREFLY: "firefly_anim",
+  BUTTERFLY: "butterfly_anim",
+  DIAMOND: "diamond_anim",
+} as const;
+
+const LEVEL_CFG = {
+  diamondsNeeded: 12,
+  diamondValue: 10,
+  diamondBonusValue: 15,
+} as const;
+
+// Extra mechanics (Boulder Dash-like)
+const MAGIC_WALL_ACTIVE_TICKS = 200;
+const AMOEBA_MAX_SIZE = 200;
+const AMOEBA_GROW_CHANCE = 0.25;
+
+// Active map (keeps your current default)
+const MAP: string[] = [
+  "                                        ",
+  "========================================",
+  "=...... ..+.* .....*.*....... ....*....=",
+  "=.*S*...... .........*+..*.... ..... ..=",
+  "=.......... ..*.....*.*..*........*....=",
+  "=*.**.........*......*..*....*...*.....=",
+  "=*. *......... *..*........*......*.**.=",
+  "=... ..*........*.....*. *........*.**.=",
+  "=------------------------------...*..*.=",
+  "=. ...*..+. ..*.*..........+.*+...... .=",
+  "=..+.....*..... ........** *..*....*...=",
+  "=...*..*.*..............* .*..*........=",
+  "=.*.....*........***.......*.. .+....*.=",
+  "=.+.. ..*.  .....*.*+..+....*...*..+. .=",
+  "=. *..............* *..*........+.....*=",
+  "=........------------------------------=",
+  "= *.........*...+....*.....*...*.......=",
+  "= *......... *..*........*......*.**..E=",
+  "=. ..*........*.....*.  ....+...*.**...=",
+  "=....*+..*........*......*.*+......*...=",
+  "=... ..*. ..*.**.........*.*+...... ..*=",
+  "=.+.... ..... ......... .*..*........*.=",
+  "========================================",
+];
+
+const FIREFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.DOWN, DIR.RIGHT, DIR.UP];
+const BUTTERFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.UP, DIR.RIGHT, DIR.DOWN];
+
+const DIR_TO_STR = (d: Vec2): "left" | "right" | "up" | "down" => {
+  if (eqV(d, DIR.LEFT)) return "left";
+  if (eqV(d, DIR.RIGHT)) return "right";
+  if (eqV(d, DIR.UP)) return "up";
+  return "down";
+};
+
+const STR_TO_DIR: Record<"left" | "right" | "up" | "down", Vec2> = {
+  left: DIR.LEFT,
+  right: DIR.RIGHT,
+  up: DIR.UP,
+  down: DIR.DOWN,
+};
+
+const NEXT_LEFT: Record<"left" | "right" | "up" | "down", Vec2> = {
+  left: DIR.DOWN,
+  down: DIR.RIGHT,
+  right: DIR.UP,
+  up: DIR.LEFT,
+};
+
+const NEXT_RIGHT: Record<"left" | "right" | "up" | "down", Vec2> = {
+  left: DIR.UP,
+  up: DIR.RIGHT,
+  right: DIR.DOWN,
+  down: DIR.LEFT,
+};
+
+export class GameScene extends Phaser.Scene {
+  private gridW = 0;
+  private gridH = 0;
+  private grid: (CellEntity | null)[][] = [];
+
+  // reservation grid (boulders/diamonds falling plans)
+  private inMove: (MoveableEntity | null)[][] = [];
+
+  // Cells vacated by Rockford in the current tick (to match original tick ordering: falling objects react 1 tick later)
+  private rockfordVacated: Set<string> = new Set();
+
+  private player!: PlayerEntity;
+  private exit!: CellEntity;
+  private spawnSprite!: Phaser.GameObjects.Sprite;
+  private playing = false;
+
+  private score = 0;
+  private diamondsCollected = 0;
+  private exitOpened = false;
+
+  private stepAcc = 0;
+  private tickCount = 0;
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+
+  private camOffset: Vec2 = V(0, 0);
+  private camWantedPx: Vec2 = V(0, 0);
+
+  // UI
+  private scoreText!: Phaser.GameObjects.Text;
+  private diamondsText!: Phaser.GameObjects.Text;
+
+  constructor() {
+    super("GameScene");
+  }
+
+  preload() {
+    this.load.spritesheet("bd", "resources/spritesheet_A.png", {
+      frameWidth: TILE,
+      frameHeight: TILE,
+    });
+  }
+
+  create() {
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.createAnims();
+    this.buildLevelFromMap(MAP);
+
+    this.cameras.main.setBounds(0, 0, BOARD_WIDTH * TILE, BOARD_HEIGHT * TILE);
+    this.cameras.main.setZoom(1);
+
+    this.createUI();
+    this.snapCameraToPlayer();
+
+    this.initFireflies();
+    this.initButterflies();
+    this.markBouldersToMove();
+    this.markFirefliesToMove();
+    this.markButterfliesToMove();
+  }
+
+  update(_time: number, deltaMs: number) {
+    const delta = deltaMs / 1000;
+    this.stepAcc += delta;
+
+    this.updateCamera(delta);
+
+    if (this.stepAcc >= SPEED) {
+      while (this.stepAcc >= SPEED) {
+        this.stepAcc -= SPEED;
+        this.step();
+      }
+    }
+  }
+
+  private posKey(x: number, y: number) { return `${x},${y}`; }
+
+  private createAnims() {
+    // Rockford
+    this.anims.create({ key: ANIMS.IDLE1, frames: [{ key: "bd", frame: 0 }], frameRate: 1, repeat: 0 });
+    this.anims.create({
+      key: ANIMS.IDLE2,
+      frames: this.anims.generateFrameNumbers("bd", { start: 0, end: 2 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: ANIMS.IDLE3,
+      frames: this.anims.generateFrameNumbers("bd", { start: 3, end: 6 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: ANIMS.RUN_L,
+      frames: this.anims.generateFrameNumbers("bd", { start: 10, end: 16 }),
+      frameRate: 12,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: ANIMS.RUN_R,
+      frames: this.anims.generateFrameNumbers("bd", { start: 20, end: 26 }),
+      frameRate: 12,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: ANIMS.BORN,
+      frames: this.anims.generateFrameNumbers("bd", { start: 100, end: 104 }),
+      frameRate: 12,
+      repeat: 0,
+    });
+
+    // Spawn blinking (30..31) — play 5×, then born
+    this.anims.create({
+      key: ANIMS.SPAWN,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.TITAN, end: FRAMES.SPAWN }),
+      frameRate: 10,
+      repeat: 0,
+    });
+
+    // Exit opened (same frames in your original JS)
+    this.anims.create({
+      key: ANIMS.EXIT_OPEN,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.TITAN, end: FRAMES.SPAWN }),
+      frameRate: 10,
+      repeat: -1,
+    });
+
+    // Explosion (100..102)
+    this.anims.create({
+      key: ANIMS.EXPLOSION,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.EXPLOSION, end: FRAMES.EXPLOSION + 2 }),
+      frameRate: 12,
+      repeat: 0,
+    });
+
+    // Enemies
+    this.anims.create({
+      key: ANIMS.FIREFLY,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.FIREFLY, end: FRAMES.FIREFLY + 3 }),
+      frameRate: 10,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: ANIMS.BUTTERFLY,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.BUTTERFLY, end: FRAMES.BUTTERFLY + 3 }),
+      frameRate: 10,
+      repeat: -1,
+    });
+
+    // Diamond spin (40..47)
+    this.anims.create({
+      key: ANIMS.DIAMOND,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.DIAMOND, end: FRAMES.DIAMOND + 7 }),
+      frameRate: 12,
+      repeat: -1,
+    });
+  }
+
+  private createUI() {
+    this.scoreText = this.add
+      .text(4, 4, "Score: 0", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.diamondsText = this.add
+      .text(120, 4, `Diamonds: 0/${LEVEL_CFG.diamondsNeeded}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+  }
+
+  private setCell(x: number, y: number, ent: CellEntity | null) {
+    this.grid[y]![x] = ent;
+    if (ent) {
+      ent.pos = V(x, y);
+      if (ent.sprite) ent.sprite.setPosition(x * TILE, y * TILE);
+    }
+  }
+
+  private inBounds(p: Vec2) {
+    return p.x >= 0 && p.y >= 0 && p.x < this.gridW && p.y < this.gridH;
+  }
+
+  private getCell(p: Vec2): CellEntity | null {
+    if (!this.inBounds(p)) return null;
+    return this.grid[p.y]![p.x] ?? null;
+  }
+
+  private buildLevelFromMap(map: string[]) {
+    this.gridH = map.length;
+    this.gridW = map[0]!.length;
+    this.grid = Array.from({ length: this.gridH }, () => Array<CellEntity | null>(this.gridW).fill(null));
+    this.inMove = Array.from({ length: this.gridH }, () => Array<MoveableEntity | null>(this.gridW).fill(null));
+
+    // Exit
+    this.exit = {
+      kind: CellKind.Exit,
+      pos: V(0, 0),
+      sprite: this.add.sprite(0, 0, "bd", FRAMES.TITAN).setOrigin(0, 0).setDepth(10),
+    };
+
+    // Player (hidden until spawn completes)
+    this.player = {
+      kind: CellKind.Player,
+      pos: V(0, 0),
+      sprite: this.add.sprite(0, 0, "bd", 0).setOrigin(0, 0).setDepth(20),
+      hidden: true,
+      direction: DIR.ZERO,
+      lastSideAnim: ANIMS.RUN_R,
+      pushAttempts: 0,
+      isDead: false,
+    };
+    this.player.sprite!.setVisible(false);
+
+    let spawnPos = V(0, 0);
+
+    for (let y = 0; y < this.gridH; y++) {
+      const row = map[y]!;
+      for (let x = 0; x < this.gridW; x++) {
+        const ch = row[x] ?? " ";
+        if (ch === "*") {
+          this.spawnMoveable(CellKind.Boulder, x, y, FRAMES.BOULDER);
+        } else if (ch === "+") {
+          const d = this.spawnMoveable(CellKind.Diamond, x, y, FRAMES.DIAMOND);
+          d.sprite!.play(ANIMS.DIAMOND);
+        } else if (ch === ".") {
+          this.spawnStatic(CellKind.Dirt, x, y, FRAMES.DIRT);
+        } else if (ch === "-") {
+          this.spawnStatic(CellKind.Wall, x, y, FRAMES.BRICKS);
+        } else if (ch === "=") {
+          this.spawnStatic(CellKind.Titan, x, y, FRAMES.TITAN);
+        } else if (ch === "P") {
+          this.spawnMagicWall(x, y);
+        } else if (ch === "A") {
+          this.spawnAmoeba(x, y);
+        } else if (ch === "O") {
+          const f = this.spawnEnemy(CellKind.Firefly, x, y, FRAMES.FIREFLY);
+          f.sprite!.play(ANIMS.FIREFLY);
+        } else if (ch === "X") {
+          const b = this.spawnEnemy(CellKind.Butterfly, x, y, FRAMES.BUTTERFLY);
+          b.sprite!.play(ANIMS.BUTTERFLY);
+        } else if (ch === "S") {
+          spawnPos = V(x, y);
+          this.setCell(x, y, this.player);
+        } else if (ch === "E") {
+          this.setCell(x, y, this.exit);
+        }
+      }
+    }
+
+    // Spawn sprite (not in grid, just visual gate)
+    this.spawnSprite = this.add
+      .sprite(spawnPos.x * TILE, spawnPos.y * TILE, "bd", FRAMES.SPAWN)
+      .setOrigin(0, 0)
+      .setDepth(30);
+
+    let blinkCount = 0;
+    this.spawnSprite.on(Phaser.Animations.Events.ANIMATION_COMPLETE, (_anim: Phaser.Animations.Animation) => {
+      const key = this.spawnSprite.anims.getName();
+      if (key === ANIMS.SPAWN) {
+        blinkCount++;
+        if (blinkCount >= 5) {
+          this.spawnSprite.play(ANIMS.BORN);
+        } else {
+          this.spawnSprite.play(ANIMS.SPAWN);
+        }
+      } else if (key === ANIMS.BORN) {
+        this.spawnSprite.destroy();
+        this.player.hidden = false;
+        this.player.sprite!.setVisible(true);
+        this.player.sprite!.play(ANIMS.IDLE1);
+        this.playing = true;
+      }
+    });
+
+    this.spawnSprite.play(ANIMS.SPAWN);
+
+    // Init camera wanted pos
+    this.calcWantedCamPos();
+    this.cameras.main.scrollX = this.camWantedPx.x - this.cameras.main.width / 2;
+    this.cameras.main.scrollY = this.camWantedPx.y - this.cameras.main.height / 2;
+  }
+
+  private spawnStatic(kind: CellKind.Dirt | CellKind.Wall | CellKind.Titan, x: number, y: number, frame: number) {
+    const ent: CellEntity = {
+      kind,
+      pos: V(x, y),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", frame).setOrigin(0, 0).setDepth(5),
+    };
+    this.setCell(x, y, ent);
+    return ent;
+  }
+
+  private spawnMagicWall(x: number, y: number) {
+    // Sprite frame for Magic Wall isn't defined in the original JS sample; keep BRICKS frame by default.
+    const ent: MagicWallEntity = {
+      kind: CellKind.MagicWall,
+      pos: V(x, y),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.BRICKS).setOrigin(0, 0).setDepth(5),
+      activeUntilTick: 0,
+    };
+    this.setCell(x, y, ent);
+    return ent;
+  }
+
+  private spawnAmoeba(x: number, y: number) {
+    // Amoeba frame not specified; reuse DIAMOND frame as placeholder until spritesheet index is known.
+    const ent: CellEntity = {
+      kind: CellKind.Amoeba,
+      pos: V(x, y),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.DIAMOND).setOrigin(0, 0).setDepth(15),
+    };
+    this.setCell(x, y, ent);
+    return ent;
+  }
+
+  private spawnMoveable(kind: CellKind.Boulder | CellKind.Diamond, x: number, y: number, frame: number) {
+    const ent: MoveableEntity = {
+      kind,
+      pos: V(x, y),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", frame).setOrigin(0, 0).setDepth(15),
+      isFalling: false,
+      direction: DIR.ZERO,
+      fallScenario: null,
+      moveProcessed: false,
+    };
+    this.setCell(x, y, ent);
+    return ent;
+  }
+
+  private spawnEnemy(kind: CellKind.Firefly | CellKind.Butterfly, x: number, y: number, frame: number) {
+    const ent: EnemyEntity = {
+      kind,
+      pos: V(x, y),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", frame).setOrigin(0, 0).setDepth(15),
+      direction: DIR.ZERO,
+      moveProcessed: false,
+      mustWait: false,
+    };
+    this.setCell(x, y, ent);
+    return ent;
+  }
+
+  private step() {
+    this.tickCount++;
+    this.resetMovingFlags();
+    this.rockfordVacated.clear();
+    this.moveRockford();
+    this.markBouldersToMove();
+    this.markFirefliesToMove();
+    this.markButterfliesToMove();
+    this.moveBoulders();
+    this.moveFireflies();
+    this.moveButterflies();
+
+    this.processAmoeba();
+
+    if (this.playing) {
+      this.processRockfordCollisionsWithEnemies();
+      this.processEnemyCollisionsWithAmoeba();
+    }
+
+    this.markBouldersToMove();
+    this.markFirefliesToMove();
+    this.markButterfliesToMove();
+  }
+
+  private resetMovingFlags() {
+    for (let y = 0; y < this.gridH; y++) {
+      for (let x = 0; x < this.gridW; x++) {
+        this.inMove[y]![x] = null;
+        const obj = this.grid[y]![x];
+        if (!obj) continue;
+        if (isMoveable(obj) || isEnemy(obj)) {
+          obj.moveProcessed = false;
+          if (isEnemy(obj)) obj.killedByExplosion = undefined;
+        }
+      }
+    }
+  }
+
+  private isBlockedForRockford(obj: CellEntity | null) {
+    if (!obj) return false;
+    if (obj.kind === CellKind.Dirt) return false;
+    if (obj.kind === CellKind.Diamond) return false;
+    if (obj.kind === CellKind.Exit) return !this.exitOpened;
+    return true;
+  }
+
+  private moveRockford() {
+    if (!this.playing || this.player.hidden || this.player.isDead) return;
+
+    let dir = DIR.ZERO;
+    if (this.cursors.left?.isDown) dir = DIR.LEFT;
+    else if (this.cursors.right?.isDown) dir = DIR.RIGHT;
+    else if (this.cursors.up?.isDown) dir = DIR.UP;
+    else if (this.cursors.down?.isDown) dir = DIR.DOWN;
+
+    this.player.direction = dir;
+    if (eqV(dir, DIR.ZERO)) {
+      // idle
+      this.player.sprite!.play(ANIMS.IDLE1, true);
+      return;
+    }
+
+    const target = addV(this.player.pos, dir);
+    if (!this.inBounds(target)) return;
+    const obj = this.getCell(target);
+
+    // Push boulder left/right (Kaboom parity: sometimes needs a few attempts, and boulder can drop down)
+    if (obj && obj.kind === CellKind.Boulder && (eqV(dir, DIR.LEFT) || eqV(dir, DIR.RIGHT))) {
+      const b = obj as MoveableEntity;
+      const beyond = addV(target, dir);
+      if (!this.inBounds(beyond) || this.getCell(beyond) !== null) {
+        // still animate "trying to push" even if it cannot move
+        this.playRockfordAnimByDir(dir);
+        return;
+      }
+
+      // also animate while attempting to push (even if RNG gates the actual move)
+      this.playRockfordAnimByDir(dir);
+      if (!this.canPush()) {
+        return;
+      }
+const belowBoulder = addV(target, DIR.DOWN);
+      const newFallingState = this.inBounds(belowBoulder) && this.getCell(belowBoulder) === null;
+
+      // clear boulder old cell first
+      this.setCell(target.x, target.y, null);
+
+      if (newFallingState) {
+        // drop straight down instead of pushing sideways
+        this.setCell(belowBoulder.x, belowBoulder.y, b);
+        b.isFalling = true;
+        b.direction = DIR.DOWN;
+        b.fallScenario = null;
+      } else {
+        // push sideways
+        this.setCell(beyond.x, beyond.y, b);
+        b.isFalling = false;
+        b.direction = DIR.ZERO;
+        b.fallScenario = null;
+      }
+      b.moveProcessed = true;
+
+      // move rockford into the boulder cell
+      this.rockfordVacated.add(this.posKey(this.player.pos.x, this.player.pos.y));
+    this.setCell(this.player.pos.x, this.player.pos.y, null);
+      this.setCell(target.x, target.y, this.player);
+      this.playRockfordAnimByDir(dir);
+      return;
+    }
+
+    if (this.isBlockedForRockford(obj)) {
+      this.player.sprite!.play(ANIMS.IDLE1, true);
+      return;
+    }
+
+    // Collect dirt/diamond
+    if (obj && obj.kind === CellKind.Dirt) {
+      obj.sprite?.destroy();
+    }
+    if (obj && obj.kind === CellKind.Diamond) {
+      obj.sprite?.destroy();
+      this.diamondsCollected++;
+      this.score += LEVEL_CFG.diamondValue;
+      this.updateUI();
+      if (!this.exitOpened && this.diamondsCollected >= LEVEL_CFG.diamondsNeeded) {
+        this.exitOpened = true;
+        this.exit.sprite?.play(ANIMS.EXIT_OPEN);
+      }
+    }
+
+    // Enter exit
+    if (obj && obj.kind === CellKind.Exit && this.exitOpened) {
+      // Minimal: restart scene
+      this.scene.restart();
+      return;
+    }
+
+    // move
+    if (obj && obj !== this.exit) {
+      this.setCell(target.x, target.y, null);
+    }
+    // record vacated cell so falling objects don’t start falling until next tick
+    this.rockfordVacated.add(this.posKey(this.player.pos.x, this.player.pos.y));
+    this.setCell(this.player.pos.x, this.player.pos.y, null);
+    this.setCell(target.x, target.y, this.player);
+    this.playRockfordAnimByDir(dir);
+  }
+
+  private playRockfordAnimByDir(dir: Vec2) {
+    if (eqV(dir, DIR.LEFT)) {
+      this.player.lastSideAnim = ANIMS.RUN_L;
+      this.player.sprite!.play(ANIMS.RUN_L, true);
+    } else if (eqV(dir, DIR.RIGHT)) {
+      this.player.lastSideAnim = ANIMS.RUN_R;
+      this.player.sprite!.play(ANIMS.RUN_R, true);
+    } else if (eqV(dir, DIR.UP) || eqV(dir, DIR.DOWN)) {
+      this.player.sprite!.play(this.player.lastSideAnim, true);
+    }
+  }
+
+  private canPush() {
+    // Kaboom parity: a short "struggle" before pushing.
+    if (Phaser.Math.Between(0, 5) > 1 || this.player.pushAttempts < 2) {
+      this.player.pushAttempts++;
+      return false;
+    }
+    this.player.pushAttempts = 0;
+    return true;
+  }
+
+  private isRounded(kind: CellKind) {
+    return kind === CellKind.Boulder || kind === CellKind.Diamond;
+  }
+
+  private markBouldersToMove() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || !isMoveable(obj)) continue;
+
+        const m = obj;
+
+        // only boulders/diamonds have gravity in your JS
+        const below = this.grid[m.pos.y + 1]?.[m.pos.x] ?? null;
+
+        // Delay falling into a cell Rockford just vacated this tick (matches original BD feel: 1-tick gap when running away)
+        if (below === null && !m.isFalling && this.rockfordVacated.has(this.posKey(m.pos.x, m.pos.y + 1))) {
+          continue;
+        }
+
+        // Magic wall behaves like "pass-through" for falling objects
+        const belowIsMagicWall = !!below && below.kind === CellKind.MagicWall;
+
+        // fall straight
+        if (below === null || belowIsMagicWall || ((isPlayer(below) || isEnemy(below)) && m.isFalling)) {
+          if (!this.inMove[m.pos.y + 1]?.[m.pos.x]) {
+            m.isFalling = true;
+            m.direction = DIR.DOWN;
+            m.fallScenario = "straight";
+            this.inMove[m.pos.y + 1]![m.pos.x] = m;
+          }
+          continue;
+        }
+
+        // try roll if below is rounded
+        if (below && this.isRounded(below.kind)) {
+          // roll left
+          const left = this.grid[m.pos.y]?.[m.pos.x - 1] ?? null;
+          const belowLeft = this.grid[m.pos.y + 1]?.[m.pos.x - 1] ?? null;
+          if (left === null && belowLeft === null && m.fallScenario === null && !this.inMove[m.pos.y]?.[m.pos.x - 1]) {
+            m.isFalling = true;
+            m.direction = DIR.LEFT;
+            m.fallScenario = "rollLeft";
+            this.inMove[m.pos.y]![m.pos.x - 1] = m;
+            continue;
+          }
+
+          // roll right
+          const right = this.grid[m.pos.y]?.[m.pos.x + 1] ?? null;
+          const belowRight = this.grid[m.pos.y + 1]?.[m.pos.x + 1] ?? null;
+          if (right === null && belowRight === null && m.fallScenario === null && !this.inMove[m.pos.y]?.[m.pos.x + 1]) {
+            m.isFalling = true;
+            m.direction = DIR.RIGHT;
+            m.fallScenario = "rollRight";
+            this.inMove[m.pos.y]![m.pos.x + 1] = m;
+            continue;
+          }
+        }
+
+        // stop
+        m.isFalling = false;
+        m.direction = DIR.ZERO;
+        m.fallScenario = null;
+      }
+    }
+  }
+
+  private moveBoulders() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || !isMoveable(obj)) continue;
+        const m = obj;
+        if (m.moveProcessed) continue;
+        if (eqV(m.direction, DIR.ZERO)) continue;
+
+        const newPos = addV(m.pos, m.direction);
+        if (!this.inBounds(newPos)) continue;
+
+        // reserved?
+        if (this.inMove[newPos.y]![newPos.x] !== m) continue;
+
+        const crossing = this.getCell(newPos);
+
+        // Magic wall: falling object passes through and is converted.
+        if (
+          crossing &&
+          crossing.kind === CellKind.MagicWall &&
+          eqV(m.direction, DIR.DOWN) &&
+          m.isFalling
+        ) {
+          this.handleMagicWallDrop(m, crossing as MagicWallEntity);
+          m.moveProcessed = true;
+          continue;
+        }
+
+        // move (matches Kaboom original: move first, then resolve impact)
+        this.setCell(m.pos.x, m.pos.y, null);
+        this.setCell(newPos.x, newPos.y, m);
+        m.moveProcessed = true;
+
+        this.fallingObjectImpactedOn(crossing);
+      }
+    }
+  }
+
+  private fallingObjectImpactedOn(obj: CellEntity | null) {
+    if (!obj) return;
+
+    if (obj.kind === CellKind.Player) {
+      this.boomRockford();
+      return;
+    }
+
+    if (obj.kind === CellKind.Firefly) {
+      this.boomObject(obj);
+      return;
+    }
+
+    if (obj.kind === CellKind.Butterfly) {
+      const isChainExplosion = (obj as EnemyEntity).killedByExplosion === true;
+      this.boomButterfly(obj as EnemyEntity, isChainExplosion);
+      return;
+    }
+  }
+
+  private handleMagicWallDrop(m: MoveableEntity, wall: MagicWallEntity) {
+    // Activate wall on first use
+    if (wall.activeUntilTick === 0 || wall.activeUntilTick <= this.tickCount) {
+      wall.activeUntilTick = this.tickCount + MAGIC_WALL_ACTIVE_TICKS;
+    }
+
+    const below = addV(wall.pos, DIR.DOWN);
+    // Remove original from current spot
+    this.setCell(m.pos.x, m.pos.y, null);
+
+    // If wall already expired, object just rests on top (no conversion)
+    if (wall.activeUntilTick <= this.tickCount) {
+      // fall back: do nothing
+      this.setCell(m.pos.x, m.pos.y, m);
+      return;
+    }
+
+    if (!this.inBounds(below)) return;
+    if (this.getCell(below) !== null) {
+      // disappears if blocked below
+      m.sprite?.destroy();
+      return;
+    }
+
+    // Convert boulder<->diamond
+    const newKind = m.kind === CellKind.Boulder ? CellKind.Diamond : CellKind.Boulder;
+    m.kind = newKind;
+    if (newKind === CellKind.Diamond) {
+      m.sprite?.setFrame(FRAMES.DIAMOND);
+      m.sprite?.play(ANIMS.DIAMOND);
+    } else {
+      m.sprite?.stop();
+      m.sprite?.setFrame(FRAMES.BOULDER);
+    }
+
+    m.isFalling = true;
+    m.direction = DIR.DOWN;
+    m.fallScenario = null;
+
+    this.setCell(below.x, below.y, m);
+  }
+
+  private initFireflies() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Firefly) continue;
+        const f = obj as EnemyEntity;
+        f.direction = this.getFirstAvailableEnemyDirection(f, FIREFLY_INIT_DIRS);
+      }
+    }
+  }
+
+  private initButterflies() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Butterfly) continue;
+        const b = obj as EnemyEntity;
+        b.direction = this.getFirstAvailableEnemyDirection(b, BUTTERFLY_INIT_DIRS);
+      }
+    }
+  }
+
+  private getFirstAvailableEnemyDirection(enemy: EnemyEntity, order: Vec2[]): Vec2 {
+    for (const d of order) {
+      const next = addV(enemy.pos, d);
+      if (!this.inBounds(next)) continue;
+      if (this.getCell(next) === null) return d;
+    }
+    return DIR.ZERO;
+  }
+
+  private markFirefliesToMove() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Firefly) continue;
+        const f = obj as EnemyEntity;
+        f.mustWait = false;
+
+        if (eqV(f.direction, DIR.ZERO)) {
+          f.direction = this.getFirstAvailableEnemyDirection(f, FIREFLY_INIT_DIRS);
+          if (eqV(f.direction, DIR.ZERO)) continue;
+        }
+
+        // follow left side (clockwise)
+        const dirStr = DIR_TO_STR(f.direction);
+        let nextDir = NEXT_LEFT[dirStr];
+        let nextObj = this.getCell(addV(f.pos, nextDir));
+        if (nextObj === null || nextObj.kind === CellKind.Firefly) {
+          f.direction = nextDir;
+          continue;
+        }
+
+        nextDir = STR_TO_DIR[dirStr];
+        nextObj = this.getCell(addV(f.pos, nextDir));
+        if (nextObj === null || nextObj.kind === CellKind.Firefly) {
+          f.direction = nextDir;
+          continue;
+        }
+
+        f.direction = NEXT_RIGHT[dirStr];
+        f.mustWait = true;
+      }
+    }
+  }
+
+  private markButterfliesToMove() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Butterfly) continue;
+        const b = obj as EnemyEntity;
+        b.mustWait = false;
+
+        if (eqV(b.direction, DIR.ZERO)) {
+          b.direction = this.getFirstAvailableEnemyDirection(b, BUTTERFLY_INIT_DIRS);
+          if (eqV(b.direction, DIR.ZERO)) continue;
+        }
+
+        // follow right side (counterclockwise)
+        const dirStr = DIR_TO_STR(b.direction);
+        let nextDir = NEXT_RIGHT[dirStr];
+        let nextObj = this.getCell(addV(b.pos, nextDir));
+        if (nextObj === null || nextObj.kind === CellKind.Butterfly) {
+          b.direction = nextDir;
+          continue;
+        }
+
+        nextDir = STR_TO_DIR[dirStr];
+        nextObj = this.getCell(addV(b.pos, nextDir));
+        if (nextObj === null || nextObj.kind === CellKind.Butterfly) {
+          b.direction = nextDir;
+          continue;
+        }
+
+        b.direction = NEXT_LEFT[dirStr];
+        b.mustWait = true;
+      }
+    }
+  }
+
+  private moveFireflies() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Firefly) continue;
+        const f = obj as EnemyEntity;
+        if (f.moveProcessed || f.mustWait || eqV(f.direction, DIR.ZERO)) continue;
+
+        const newPos = addV(f.pos, f.direction);
+        if (!this.inBounds(newPos)) continue;
+
+        if (this.inMove[newPos.y]![newPos.x] !== null) {
+          // reserved by falling object -> skip
+          continue;
+        }
+
+        const crossing = this.getCell(newPos);
+        if (crossing && crossing.kind === CellKind.Firefly && (crossing as EnemyEntity).moveProcessed) continue;
+
+        // move
+        this.setCell(f.pos.x, f.pos.y, null);
+        this.setCell(newPos.x, newPos.y, f);
+        f.moveProcessed = true;
+
+        // swap/cross handling (mirrors your JS)
+        if (crossing && isEnemy(crossing)) {
+          // push the crossed enemy in its direction if possible
+          const e = crossing;
+          const eNew = addV(e.pos, e.direction);
+          if (this.inBounds(eNew) && this.getCell(eNew) === null) {
+            this.setCell(e.pos.x, e.pos.y, null);
+            this.setCell(eNew.x, eNew.y, e);
+            e.moveProcessed = true;
+          }
+        }
+      }
+    }
+  }
+
+  private moveButterflies() {
+    for (let y = this.gridH - 1; y >= 0; y--) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || obj.kind !== CellKind.Butterfly) continue;
+        const b = obj as EnemyEntity;
+        if (b.moveProcessed || b.mustWait || eqV(b.direction, DIR.ZERO)) continue;
+
+        const newPos = addV(b.pos, b.direction);
+        if (!this.inBounds(newPos)) continue;
+
+        if (this.inMove[newPos.y]![newPos.x] !== null) {
+          continue;
+        }
+
+        const crossing = this.getCell(newPos);
+        if (crossing && crossing.kind === CellKind.Butterfly && (crossing as EnemyEntity).moveProcessed) continue;
+
+        this.setCell(b.pos.x, b.pos.y, null);
+        this.setCell(newPos.x, newPos.y, b);
+        b.moveProcessed = true;
+
+        if (crossing && isEnemy(crossing)) {
+          const e = crossing;
+          const eNew = addV(e.pos, e.direction);
+          if (this.inBounds(eNew) && this.getCell(eNew) === null) {
+            this.setCell(e.pos.x, e.pos.y, null);
+            this.setCell(eNew.x, eNew.y, e);
+            e.moveProcessed = true;
+          }
+        }
+      }
+    }
+  }
+
+  private processRockfordCollisionsWithEnemies() {
+    // check 4-neighborhood
+    for (const d of FIREFLY_INIT_DIRS) {
+      const p = addV(this.player.pos, d);
+      const obj = this.getCell(p);
+      if (obj && isEnemy(obj)) {
+        this.boomRockford();
+        return;
+      }
+    }
+  }
+
+  private processAmoeba() {
+    // Minimal Amoeba rules:
+    // - grows into Dirt/Empty with some probability
+    // - if cannot grow anymore -> turns into Diamonds
+    // - if grows too large -> turns into Boulders
+    // (see StrategyWiki / manuals)
+
+    // Collect all amoeba positions
+    const amoebas: Vec2[] = [];
+    for (let y = 0; y < this.gridH; y++) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (obj && obj.kind === CellKind.Amoeba) amoebas.push(V(x, y));
+      }
+    }
+    if (amoebas.length === 0) return;
+
+    // Overgrowth
+    if (amoebas.length >= AMOEBA_MAX_SIZE) {
+      for (const p of amoebas) {
+        const a = this.getCell(p);
+        if (!a || a.kind !== CellKind.Amoeba) continue;
+        a.sprite?.destroy();
+        this.spawnMoveable(CellKind.Boulder, p.x, p.y, FRAMES.BOULDER);
+      }
+      return;
+    }
+
+    const candidates: { from: Vec2; to: Vec2 }[] = [];
+    let hasAnyGrowSpace = false;
+    for (const p of amoebas) {
+      for (const d of FIREFLY_INIT_DIRS) {
+        const t = addV(p, d);
+        if (!this.inBounds(t)) continue;
+        const o = this.getCell(t);
+        if (o === null || o.kind === CellKind.Dirt) {
+          hasAnyGrowSpace = true;
+          if (Math.random() < AMOEBA_GROW_CHANCE) {
+            candidates.push({ from: p, to: t });
+          }
+        }
+      }
+    }
+
+    // Suffocation -> diamonds
+    if (!hasAnyGrowSpace) {
+      for (const p of amoebas) {
+        const a = this.getCell(p);
+        if (!a || a.kind !== CellKind.Amoeba) continue;
+        a.sprite?.destroy();
+        const d = this.spawnMoveable(CellKind.Diamond, p.x, p.y, FRAMES.DIAMOND);
+        d.sprite!.play(ANIMS.DIAMOND);
+      }
+      return;
+    }
+
+    // Apply growth (avoid duplicates)
+    for (const g of candidates) {
+      const curTo = this.getCell(g.to);
+      if (curTo && curTo.kind === CellKind.Amoeba) continue;
+      if (curTo && curTo.kind !== CellKind.Dirt) continue;
+      curTo?.sprite?.destroy();
+      this.spawnAmoeba(g.to.x, g.to.y);
+    }
+  }
+
+  private processEnemyCollisionsWithAmoeba() {
+    // Placeholder hook; amoeba not currently spawned in your maps.
+    // Implemented to keep parity with your JS structure.
+    for (let y = 0; y < this.gridH; y++) {
+      for (let x = 0; x < this.gridW; x++) {
+        const obj = this.grid[y]![x];
+        if (!obj || !isEnemy(obj)) continue;
+
+        const enemy = obj;
+        for (const d of FIREFLY_INIT_DIRS) {
+          const p = addV(enemy.pos, d);
+          const near = this.getCell(p);
+          if (near && near.kind === CellKind.Amoeba) {
+            if (enemy.kind === CellKind.Firefly) this.boomObject(enemy);
+            else this.boomButterfly(enemy, false);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  private boomObject(obj: CellEntity | null) {
+    if (!obj) return;
+    if (obj.kind === CellKind.Player) {
+      this.boomRockford();
+      return;
+    }
+    this.boom(obj.pos, "standard");
+    obj.sprite?.destroy();
+    this.setCell(obj.pos.x, obj.pos.y, null);
+  }
+
+  private boomButterfly(butterfly: EnemyEntity | null, isChainExplosion: boolean) {
+    if (!butterfly) return;
+    const pos = butterfly.pos;
+    butterfly.sprite?.destroy();
+    this.setCell(pos.x, pos.y, null);
+    this.boom(pos, isChainExplosion ? "standard" : "butterfly");
+  }
+
+  private boomRockford() {
+    this.playing = false;
+    this.player.isDead = true;
+    const pos = this.player.pos;
+    this.player.sprite?.destroy();
+    this.setCell(pos.x, pos.y, null);
+    this.boom(pos, "standard");
+    // quick restart after short delay (matches "dead" feel)
+    this.time.delayedCall(600, () => this.scene.restart());
+  }
+
+  private boom(center: Vec2, explosionType: "standard" | "butterfly") {
+    for (let x = center.x - 1; x <= center.x + 1; x++) {
+      for (let y = center.y - 1; y <= center.y + 1; y++) {
+        const p = V(x, y);
+        if (!this.inBounds(p)) continue;
+
+        const obj = this.getCell(p);
+        if (obj) {
+          if (obj.kind === CellKind.Titan || obj.kind === CellKind.Exit) {
+            continue;
+          }
+          if (isEnemy(obj)) {
+            obj.killedByExplosion = true;
+          }
+          obj.sprite?.destroy();
+          this.setCell(x, y, null);
+        }
+
+        if (explosionType === "butterfly") {
+          const d = this.spawnMoveable(CellKind.Diamond, x, y, FRAMES.DIAMOND);
+          d.sprite!.play(ANIMS.DIAMOND);
+        } else {
+          const s = this.add
+            .sprite(x * TILE, y * TILE, "bd", FRAMES.EXPLOSION)
+            .setOrigin(0, 0)
+            .setDepth(25);
+          const exp: CellEntity = { kind: CellKind.Explosion, pos: V(x, y), sprite: s };
+          this.setCell(x, y, exp);
+          s.play(ANIMS.EXPLOSION);
+          s.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+            const c = this.getCell(V(x, y));
+            if (c && c.kind === CellKind.Explosion) {
+              this.setCell(x, y, null);
+            }
+            s.destroy();
+          });
+        }
+      }
+    }
+  }
+
+  private updateUI() {
+    this.scoreText.setText(`Score: ${this.score}`);
+    this.diamondsText.setText(`Diamonds: ${this.diamondsCollected}/${LEVEL_CFG.diamondsNeeded}`);
+  }
+
+  // Camera
+  private calcWantedCamPos() {
+    this.camWantedPx = V((this.camOffset.x + VISIBLE_W / 2) * TILE, (this.camOffset.y + VISIBLE_H / 2) * TILE);
+  }
+
+  private snapCameraToPlayer() {
+    this.camOffset = V(
+      Phaser.Math.Clamp(this.player.pos.x - Math.floor(VISIBLE_W / 2), 0, BOARD_WIDTH - VISIBLE_W),
+      Phaser.Math.Clamp(this.player.pos.y - Math.floor(VISIBLE_H / 2), 0, BOARD_HEIGHT - VISIBLE_H),
+    );
+    this.calcWantedCamPos();
+    this.cameras.main.centerOn(this.camWantedPx.x, this.camWantedPx.y);
+  }
+
+  private updateCamera(_delta: number) {
+    // same logic as Kaboom version: move offset when near edges of view
+    const old = { ...this.camOffset };
+
+    if (this.player.pos.x - this.camOffset.x < 5 && this.camOffset.x > 0) this.camOffset.x -= 1;
+    if (this.player.pos.x - this.camOffset.x > VISIBLE_W - 5 && this.camOffset.x < BOARD_WIDTH - VISIBLE_W) this.camOffset.x += 1;
+    if (this.player.pos.y - this.camOffset.y < 5 && this.camOffset.y > 0) this.camOffset.y -= 1;
+    if (this.player.pos.y - this.camOffset.y > VISIBLE_H - 5 && this.camOffset.y < BOARD_HEIGHT - VISIBLE_H) this.camOffset.y += 1;
+
+    if (old.x !== this.camOffset.x || old.y !== this.camOffset.y) {
+      this.calcWantedCamPos();
+    }
+    this.cameras.main.centerOn(this.camWantedPx.x, this.camWantedPx.y);
+  }
+}
