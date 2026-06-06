@@ -80,8 +80,14 @@ const ANIMS = {
 
 // Extra mechanics (Boulder Dash-like)
 const MAGIC_WALL_ACTIVE_TICKS = 200;
-const AMOEBA_MAX_SIZE = 200;
-const AMOEBA_GROW_CHANCE = 0.25;
+
+// Amoeba – autentické chování naportované z disassembly (ProcessAmoeba @ $6fd0).
+const AMOEBA_MAX_SIZE = 200; // >= 200 buněk → celá amoeba se přemění na balvany
+const AMOEBA_MASK_SLOW = 0x7f; // start: (rand & mask) < 4 ≈ 3 % šance růstu / buňku / tick
+const AMOEBA_MASK_FAST = 0x0f; // po uplynutí času: ≈ 25 % (růst zrychlí, tlačí na hráče)
+const AMOEBA_SLOW_GROWTH_SECONDS = 30; // v originále per jeskyně (Amoeba3PercentMax)
+// Pořadí směrů růstu jako v originále (offset tabulka 01 28 2a 51): nahoru, vlevo, vpravo, dolů.
+const AMOEBA_DIRS: Vec2[] = [DIR.UP, DIR.LEFT, DIR.RIGHT, DIR.DOWN];
 
 const FIREFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.DOWN, DIR.RIGHT, DIR.UP];
 const BUTTERFLY_INIT_DIRS: Vec2[] = [DIR.LEFT, DIR.UP, DIR.RIGHT, DIR.DOWN];
@@ -143,6 +149,12 @@ export class GameScene extends Phaser.Scene {
   private diamondsCollected = 0;
   private diamondsNeeded = 0;
   private exitOpened = false;
+
+  // Stav amoeby (zrcadlí proměnné z disassembly)
+  private amoebaCountPrev = 0; // AmoebaCellCountPreviousTick
+  private amoebaCouldGrowLastTick = true; // AmeobaCouldGrowLastTick
+  private amoebaIsGrowing = false; // AmoebaIsGrowing
+  private amoebaGrowthMask = AMOEBA_MASK_SLOW; // AmoebaGrowthProbabilityMask
 
   // Timer
   private timeLimit = 0;
@@ -217,6 +229,12 @@ export class GameScene extends Phaser.Scene {
     this.timeRemaining = cave.timeLimit;
     // PRNG seedujeme číslem jeskyně → stejná jeskyně má reprodukovatelný průběh náhod.
     this.rng = new Rng(this.caveNumber);
+
+    // Reset stavu amoeby (scene.restart znovu spustí create, ale ne inicializátory polí).
+    this.amoebaCountPrev = 0;
+    this.amoebaCouldGrowLastTick = true;
+    this.amoebaIsGrowing = false;
+    this.amoebaGrowthMask = AMOEBA_MASK_SLOW;
 
     // Setup input
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -1167,13 +1185,15 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private processAmoeba() {
-    // Minimal Amoeba rules:
-    // - grows into Dirt/Empty with some probability
-    // - if cannot grow anymore -> turns into Diamonds
-    // - if grows too large -> turns into Boulders
-    // (see StrategyWiki / manuals)
+    // Autentické chování amoeby – port z disassembly (ProcessAmoeba @ $6fd0):
+    // - každá buňka má za tick šanci (rand & mask)<4 vyrůst JEDNÍM náhodným směrem
+    //   do prázdna/hlíny; maska řídí rychlost (zpočátku ~3 %, později ~25 %),
+    // - >= 200 buněk (minulý tick) → celá amoeba se změní na balvany,
+    // - když minulý tick nemohla nikam růst → celá se změní na diamanty.
+    // Rozhodnutí přeměny stojí na hodnotách z PŘEDCHOZÍHO ticku (1-tick lag),
+    // proto je pro všechny buňky stejné.
 
-    // Collect all amoeba positions
+    // Snapshot buněk amoeby – nově vyrostlé tento tick se už nezpracují ani nepočítají.
     const amoebas: Vec2[] = [];
     for (let y = 0; y < this.gridH; y++) {
       for (let x = 0; x < this.gridW; x++) {
@@ -1183,54 +1203,83 @@ const belowBoulder = addV(target, DIR.DOWN);
     }
     if (amoebas.length === 0) return;
 
-    // Overgrowth
-    if (amoebas.length >= AMOEBA_MAX_SIZE) {
-      for (const p of amoebas) {
-        const a = this.getCell(p);
-        if (!a || a.kind !== CellKind.Amoeba) continue;
-        a.sprite?.destroy();
-        this.spawnMoveable(CellKind.Boulder, p.x, p.y, FRAMES.BOULDER);
-      }
+    const count = amoebas.length; // AmoebaCellCountThisTick
+
+    // Přerůstání: minulý tick >= 200 buněk → vše na balvany.
+    if (this.amoebaCountPrev >= AMOEBA_MAX_SIZE) {
+      for (const p of amoebas) this.convertAmoeba(p, CellKind.Boulder);
+      this.amoebaCountPrev = count;
       return;
     }
 
-    const candidates: { from: Vec2; to: Vec2 }[] = [];
-    let hasAnyGrowSpace = false;
+    // Udušení: minulý tick nemohla nikam růst → vše na diamanty.
+    if (!this.amoebaCouldGrowLastTick) {
+      for (const p of amoebas) this.convertAmoeba(p, CellKind.Diamond);
+      this.amoebaCountPrev = count;
+      return;
+    }
+
+    // Po uplynutí času se růst zrychlí (maska SLOW → FAST), jako v originále.
+    if (
+      this.amoebaGrowthMask === AMOEBA_MASK_SLOW &&
+      this.gameTime >= AMOEBA_SLOW_GROWTH_SECONDS
+    ) {
+      this.amoebaGrowthMask = AMOEBA_MASK_FAST;
+    }
+
+    // Má amoeba vůbec kam růst? (couldGrowThisTick)
+    let couldGrow = false;
     for (const p of amoebas) {
-      for (const d of FIREFLY_INIT_DIRS) {
-        const t = addV(p, d);
-        if (!this.inBounds(t)) continue;
-        const o = this.getCell(t);
-        if (o === null || o.kind === CellKind.Dirt) {
-          hasAnyGrowSpace = true;
-          // Deterministický PRNG místo Math.random() → reprodukovatelný růst amoeby.
-          if (this.rng.chance(AMOEBA_GROW_CHANCE)) {
-            candidates.push({ from: p, to: t });
+      if (this.amoebaHasGrowableNeighbor(p)) {
+        couldGrow = true;
+        break;
+      }
+    }
+
+    // Pravděpodobnostní růst: každá buňka zkusí jeden náhodný směr.
+    for (const p of amoebas) {
+      const r = this.rng.nextByte();
+      const masked = r & this.amoebaGrowthMask;
+      if (masked < 4) {
+        const t = addV(p, AMOEBA_DIRS[masked]!); // index 0–3 → nahoru/vlevo/vpravo/dolů
+        if (this.inBounds(t)) {
+          const target = this.getCell(t);
+          if (target === null || target.kind === CellKind.Dirt) {
+            target?.sprite?.destroy();
+            this.spawnAmoeba(t.x, t.y);
           }
         }
       }
     }
 
-    // Suffocation -> diamonds
-    if (!hasAnyGrowSpace) {
-      for (const p of amoebas) {
-        const a = this.getCell(p);
-        if (!a || a.kind !== CellKind.Amoeba) continue;
-        a.sprite?.destroy();
-        const d = this.spawnMoveable(CellKind.Diamond, p.x, p.y, FRAMES.DIAMOND);
-        d.sprite!.play(ANIMS.DIAMOND);
-      }
-      return;
+    // Aktualizace stavu pro příští tick (zrcadlí PreTickAmoebaProcessing).
+    // couldGrowLastTick se "zapéká" na false, jakmile rostoucí amoeba ztratí prostor.
+    if (!couldGrow && this.amoebaIsGrowing) {
+      this.amoebaCouldGrowLastTick = false;
     }
+    this.amoebaIsGrowing = couldGrow;
+    this.amoebaCountPrev = count;
+  }
 
-    // Apply growth (avoid duplicates)
-    for (const g of candidates) {
-      const curTo = this.getCell(g.to);
-      if (curTo && curTo.kind === CellKind.Amoeba) continue;
-      if (curTo && curTo.kind !== CellKind.Dirt) continue;
-      curTo?.sprite?.destroy();
-      this.spawnAmoeba(g.to.x, g.to.y);
+  /** Má buňka amoeby aspoň jeden sousední růst (prázdno/hlína)? */
+  private amoebaHasGrowableNeighbor(p: Vec2): boolean {
+    for (const d of AMOEBA_DIRS) {
+      const t = addV(p, d);
+      if (!this.inBounds(t)) continue;
+      const c = this.getCell(t);
+      if (c === null || c.kind === CellKind.Dirt) return true;
     }
+    return false;
+  }
+
+  /** Přemění buňku amoeby na balvan nebo diamant. */
+  private convertAmoeba(p: Vec2, into: CellKind.Boulder | CellKind.Diamond) {
+    const a = this.getCell(p);
+    if (!a || a.kind !== CellKind.Amoeba) return;
+    a.sprite?.destroy();
+    const frame = into === CellKind.Diamond ? FRAMES.DIAMOND : FRAMES.BOULDER;
+    const m = this.spawnMoveable(into, p.x, p.y, frame);
+    if (into === CellKind.Diamond) m.sprite!.play(ANIMS.DIAMOND);
   }
 
   private processEnemyCollisionsWithAmoeba() {
