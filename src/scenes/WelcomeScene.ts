@@ -1,18 +1,37 @@
 import Phaser from "phaser";
 import { CaveLoader } from "../levels/CaveLoader";
 import { sessionStats } from "../core/SessionStats";
+import {
+  preloadAtariFonts,
+  registerAtariFonts,
+  DEFAULT_FONT,
+} from "../ui/AtariFont";
+
+const FONT = DEFAULT_FONT;
+
+// Paleta A (hnědo-oranžová) – barvy hry pro tinty bitmapového textu.
+const PAL = {
+  title: 0xffd23f, // zlatožlutá (titulek)
+  heading: 0xe0822a, // oranžová (nadpisy)
+  name: 0xffffff, // bílá (název jeskyně)
+  info: 0xd9c9a3, // krémová (info/ovládání)
+  dim: 0x9a8a66, // ztlumená
+  ok: 0x6cc04a, // zelená (start / dokončeno)
+} as const;
 
 /**
- * Welcome/Menu scene - cave selection and controls display
+ * Welcome / menu scéna – výběr jeskyně a ovládání.
+ * Text je vykreslen ostrým Atari bitmapovým fontem (Phaser RetroFont).
  */
 export class WelcomeScene extends Phaser.Scene {
   private selectedCave = 1;
   // Pořadí jeskyní v menu (test scény vepředu) + aktuální index v něm.
   private menuOrder: number[] = [];
   private menuIndex = 0;
-  private caveNumberText!: Phaser.GameObjects.Text;
-  private caveInfoText!: Phaser.GameObjects.Text;
-  private bestScoreText!: Phaser.GameObjects.Text;
+
+  private caveNameText!: Phaser.GameObjects.BitmapText;
+  private caveInfoText!: Phaser.GameObjects.BitmapText;
+  private bestScoreText!: Phaser.GameObjects.BitmapText;
 
   private leftKey!: Phaser.Input.Keyboard.Key;
   private rightKey!: Phaser.Input.Keyboard.Key;
@@ -21,7 +40,6 @@ export class WelcomeScene extends Phaser.Scene {
   private rockfordLeftSprite!: Phaser.GameObjects.Sprite;
   private rockfordRightSprite!: Phaser.GameObjects.Sprite;
   private idleAnimIndex = 0;
-  private idleAnimTimer = 0;
 
   constructor() {
     super("WelcomeScene");
@@ -38,207 +56,87 @@ export class WelcomeScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    preloadAtariFonts(this);
   }
 
   create(): void {
+    registerAtariFonts(this);
     this.createAnims();
 
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    let y = 20;
+    const cx = this.cameras.main.width / 2; // 224
 
-    // Title with Rockford sprites
-    const titleY = y + 12; // center vertically with text
-    
-    // Left Rockford - moved to the edge
+    // --- Titulek + dva Rockfordi po stranách ---
+    const title = this.add
+      .bitmapText(cx, 14, FONT, "BOULDER DASH", 24)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.title);
+
+    const titleHalf = title.width / 2;
     this.rockfordLeftSprite = this.add
-      .sprite(width / 2 - 170, titleY, "bd", 0)
+      .sprite(cx - titleHalf - 22, 26, "bd", 0)
       .setOrigin(0.5, 0.5)
       .setScale(1.5);
-    
-    // Title text
-    this.add
-      .text(width / 2, y, "BOULDER DASH", {
-        fontFamily: "Atari",
-        fontSize: "24px",
-        color: "#ffff00",
-      })
-      .setOrigin(0.5, 0);
-    
-    // Right Rockford - moved to the edge
     this.rockfordRightSprite = this.add
-      .sprite(width / 2 + 170, titleY, "bd", 0)
+      .sprite(cx + titleHalf + 22, 26, "bd", 0)
       .setOrigin(0.5, 0.5)
       .setScale(1.5);
-    
-    // Start idle animation cycle
     this.startIdleAnimationCycle();
-    
-    y += 50;
 
-    // Cave selector
-    y += 20;
+    // --- Výběr jeskyně ---
     this.add
-      .text(width / 2, y, "← SELECT CAVE →", {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0.5, 0);
-    y += 30;
+      .bitmapText(cx, 58, FONT, "< SELECT CAVE >", 8)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.heading);
 
-    this.caveNumberText = this.add
-      .text(width / 2, y, "", {
-        fontFamily: "Atari",
-        fontSize: "20px",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5, 0);
-    y += 30;
+    this.caveNameText = this.add
+      .bitmapText(cx, 72, FONT, "", 16)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.name);
 
     this.caveInfoText = this.add
-      .text(width / 2, y, "", {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 20;
+      .bitmapText(cx, 94, FONT, "", 8)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.info);
 
     this.bestScoreText = this.add
-      .text(width / 2, y, "", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 40;
+      .bitmapText(cx, 108, FONT, "", 8)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.ok);
 
-    // Difficulty (disabled for now)
-    this.add
-      .text(width / 2, y, "Difficulty: Normal", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#888888",
-      })
-      .setOrigin(0.5, 0);
-    y += 15;
-    this.add
-      .text(width / 2, y, "(Coming soon!)", {
-        fontFamily: "Atari",
-        fontSize: "10px",
-        color: "#666666",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
+    // --- Oddělovač ---
+    this.add.rectangle(cx, 126, this.cameras.main.width - 48, 1, 0x6b5a33);
 
-    // Separator
-    const sep1Y = y;
-    this.add.rectangle(width / 2, sep1Y, width - 40, 1, 0x666666);
-    y += 15;
-
-    // Controls section
+    // --- Ovládání ---
     this.add
-      .text(width / 2, y, "CONTROLS", {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#ffff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 25;
+      .bitmapText(cx, 134, FONT, "CONTROLS", 8)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.heading);
 
-    const controlsX = width / 2 - 100;
-    const lineHeight = 18;
+    const controls: [string, string][] = [
+      ["ARROWS", "MOVE ROCKFORD"],
+      ["P", "PAUSE / RESUME"],
+      ["R", "RESTART LEVEL"],
+      ["ESC", "QUIT LEVEL"],
+    ];
+    const colKey = cx - 90;
+    const colDesc = cx - 30;
+    let cy = 148;
+    for (const [key, desc] of controls) {
+      this.add.bitmapText(colKey, cy, FONT, key, 8).setOrigin(0, 0).setTint(PAL.name);
+      this.add.bitmapText(colDesc, cy, FONT, desc, 8).setOrigin(0, 0).setTint(PAL.info);
+      cy += 13;
+    }
 
+    // --- Start ---
     this.add
-      .text(controlsX, y, "⬅️ ➡️ ⬆️ ⬇️", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#ffffff",
-      })
-      .setOrigin(0, 0);
-    this.add
-      .text(controlsX + 100, y, "Move Rockford", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0, 0);
-    y += lineHeight;
+      .bitmapText(cx, 212, FONT, "PRESS ENTER TO START", 16)
+      .setOrigin(0.5, 0)
+      .setTint(PAL.ok);
 
-    this.add
-      .text(controlsX, y, "P", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#ffffff",
-      })
-      .setOrigin(0, 0);
-    this.add
-      .text(controlsX + 100, y, "Pause/Resume (Easy mode only)", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0, 0);
-    y += lineHeight;
-
-    this.add
-      .text(controlsX, y, "R", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#ffffff",
-      })
-      .setOrigin(0, 0);
-    this.add
-      .text(controlsX + 100, y, "Restart level (with confirmation)", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0, 0);
-    y += lineHeight;
-
-    this.add
-      .text(controlsX, y, "ESC", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#ffffff",
-      })
-      .setOrigin(0, 0);
-    this.add
-      .text(controlsX + 100, y, "Quit level (with confirmation)", {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0, 0);
-    y += lineHeight + 10;
-
-    // Separator
-    const sep2Y = y;
-    this.add.rectangle(width / 2, sep2Y, width - 40, 1, 0x666666);
-    y += 20;
-
-    // Start instruction
-    this.add
-      .text(width / 2, y, "Press ENTER to start", {
-        fontFamily: "Atari",
-        fontSize: "16px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-
-    // Setup keys
-    this.leftKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.LEFT
-    );
-    this.rightKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.RIGHT
-    );
-    this.enterKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.ENTER
-    );
-
+    // --- Vstup ---
+    this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.leftKey.on("down", () => this.changeCave(-1));
     this.rightKey.on("down", () => this.changeCave(1));
     this.enterKey.on("down", () => this.startGame());
@@ -264,29 +162,23 @@ export class WelcomeScene extends Phaser.Scene {
   private updateCaveDisplay(): void {
     const cave = CaveLoader.getCave(this.selectedCave);
     if (!cave) {
-      this.caveNumberText.setText(`Cave ${this.selectedCave}: Loading...`);
+      this.caveNameText.setText("LOADING...");
       return;
     }
 
-    this.caveNumberText.setText(`Cave ${this.selectedCave}: "${cave.name}"`);
+    this.caveNameText.setText(`CAVE ${this.selectedCave}: ${cave.name.toUpperCase()}`);
     this.caveInfoText.setText(
-      `Diamonds: ${cave.diamondsNeeded}   Time: ${cave.timeLimit}s`
+      `DIAMONDS ${cave.diamondsNeeded}   TIME ${cave.timeLimit}S`
     );
 
     const bestScore = sessionStats.getBestScoreForCave(this.selectedCave);
     const completed = sessionStats.wasCompleted(this.selectedCave);
-
     if (completed) {
-      this.bestScoreText.setText(
-        `✓ Completed! Best: ${bestScore} pts`
-      );
-      this.bestScoreText.setColor("#00ff00");
+      this.bestScoreText.setText(`COMPLETED! BEST ${bestScore} PTS`).setTint(PAL.ok);
     } else if (bestScore > 0) {
-      this.bestScoreText.setText(`Best attempt: ${bestScore} pts`);
-      this.bestScoreText.setColor("#ffff00");
+      this.bestScoreText.setText(`BEST ATTEMPT ${bestScore} PTS`).setTint(PAL.title);
     } else {
-      this.bestScoreText.setText("Not yet attempted");
-      this.bestScoreText.setColor("#888888");
+      this.bestScoreText.setText("NOT YET ATTEMPTED").setTint(PAL.dim);
     }
   }
 
@@ -295,49 +187,34 @@ export class WelcomeScene extends Phaser.Scene {
   }
 
   private createAnims() {
-    // Idle animations for Rockford (3 variants)
-    if (!this.anims.exists("iddle_anim_1")) {
+    const defs: [string, number, number][] = [
+      ["iddle_anim_1", 0, 0],
+      ["iddle_anim_2", 0, 2],
+      ["iddle_anim_3", 3, 6],
+    ];
+    for (const [key, start, end] of defs) {
+      if (this.anims.exists(key)) continue;
       this.anims.create({
-        key: "iddle_anim_1",
-        frames: [{ key: "bd", frame: 0 }],
-        frameRate: 1,
-        repeat: 0,
-      });
-    }
-    if (!this.anims.exists("iddle_anim_2")) {
-      this.anims.create({
-        key: "iddle_anim_2",
-        frames: this.anims.generateFrameNumbers("bd", { start: 0, end: 2 }),
-        frameRate: 6,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists("iddle_anim_3")) {
-      this.anims.create({
-        key: "iddle_anim_3",
-        frames: this.anims.generateFrameNumbers("bd", { start: 3, end: 6 }),
-        frameRate: 6,
-        repeat: -1,
+        key,
+        frames: this.anims.generateFrameNumbers("bd", { start, end }),
+        frameRate: start === end ? 1 : 6,
+        repeat: start === end ? 0 : -1,
       });
     }
   }
 
   private startIdleAnimationCycle(): void {
     const idleAnims = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
-    
     const playNextIdle = () => {
-      const animKey = idleAnims[this.idleAnimIndex]!; // index je vždy v rozsahu (modulo délky)
+      const animKey = idleAnims[this.idleAnimIndex]!; // index vždy v rozsahu (modulo délky)
       this.rockfordLeftSprite.play(animKey);
       this.rockfordRightSprite.play(animKey);
-      
-      // Cycle to next animation after 3-5 seconds
       const delay = Phaser.Math.Between(3000, 5000);
       this.time.delayedCall(delay, () => {
         this.idleAnimIndex = (this.idleAnimIndex + 1) % idleAnims.length;
         playNextIdle();
       });
     };
-    
     playNextIdle();
   }
 }
