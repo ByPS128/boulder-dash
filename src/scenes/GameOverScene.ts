@@ -20,7 +20,9 @@ export interface GameOverData {
  * Game Over scene - displays results after cave completion/failure
  */
 export class GameOverScene extends Phaser.Scene {
-  private data!: GameOverData;
+  // Pozor: pole NESMÍ být pojmenované `data` – Phaser.Scene má vlastní `data`
+  // (DataManager) a stejnojmenné pole by ho zastínilo. Proto `gameOverData`.
+  private gameOverData!: GameOverData;
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private escKey!: Phaser.Input.Keyboard.Key;
 
@@ -29,7 +31,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   init(data: GameOverData): void {
-    this.data = data;
+    this.gameOverData = data;
   }
 
   create(): void {
@@ -38,9 +40,9 @@ export class GameOverScene extends Phaser.Scene {
     let y = 30;
 
     // Result header
-    if (this.data.result === "victory") {
+    if (this.gameOverData.result === "victory") {
       this.createVictoryScreen(width, y);
-    } else if (this.data.result === "death") {
+    } else if (this.gameOverData.result === "death") {
       this.createDeathScreen(width, y);
     } else {
       this.createQuitScreen(width, y);
@@ -76,7 +78,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         width / 2,
         y,
-        `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
+        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
         {
           fontFamily: "Atari",
           fontSize: "14px",
@@ -88,7 +90,7 @@ export class GameOverScene extends Phaser.Scene {
 
     // Stats
     this.add
-      .text(width / 2, y, `Time: ${this.data.timeSpent}s / ${this.data.timeLimit}s`, {
+      .text(width / 2, y, `Time: ${this.gameOverData.timeSpent}s / ${this.gameOverData.timeLimit}s`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -97,7 +99,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 18;
 
     this.add
-      .text(width / 2, y, `Time bonus: +${this.data.timeBonus} pts`, {
+      .text(width / 2, y, `Time bonus: +${this.gameOverData.timeBonus} pts`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#00ff00",
@@ -109,7 +111,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         width / 2,
         y,
-        `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded}`,
+        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded}`,
         {
           fontFamily: "Atari",
           fontSize: "12px",
@@ -120,7 +122,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 18;
 
     this.add
-      .text(width / 2, y, `Base score: ${this.data.score}`, {
+      .text(width / 2, y, `Base score: ${this.gameOverData.score}`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -129,7 +131,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 25;
 
     this.add
-      .text(width / 2, y, `Final score: ${this.data.finalScore}`, {
+      .text(width / 2, y, `Final score: ${this.gameOverData.finalScore}`, {
         fontFamily: "Atari",
         fontSize: "16px",
         color: "#ffff00",
@@ -138,7 +140,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 35;
 
     // Actions
-    const nextCave = this.data.caveNumber < 20 ? this.data.caveNumber + 1 : 1;
+    const nextCave = this.gameOverData.caveNumber < 20 ? this.gameOverData.caveNumber + 1 : 1;
     this.add
       .text(width / 2, y, `[SPACE] Next cave (${nextCave})`, {
         fontFamily: "Atari",
@@ -171,9 +173,9 @@ export class GameOverScene extends Phaser.Scene {
     y += 35;
 
     // Death reason
-    if (this.data.deathReason) {
+    if (this.gameOverData.deathReason) {
       this.add
-        .text(width / 2, y, this.data.deathReason, {
+        .text(width / 2, y, this.gameOverData.deathReason, {
           fontFamily: "Atari",
           fontSize: "14px",
           color: "#ff6666",
@@ -187,7 +189,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         width / 2,
         y,
-        `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
+        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
         {
           fontFamily: "Atari",
           fontSize: "14px",
@@ -199,7 +201,7 @@ export class GameOverScene extends Phaser.Scene {
 
     // Stats
     this.add
-      .text(width / 2, y, `Time played: ${this.data.timeSpent}s`, {
+      .text(width / 2, y, `Time played: ${this.gameOverData.timeSpent}s`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -207,12 +209,12 @@ export class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5, 0);
     y += 18;
 
-    const remaining = this.data.diamondsNeeded - this.data.diamondsCollected;
+    const remaining = this.gameOverData.diamondsNeeded - this.gameOverData.diamondsCollected;
     this.add
       .text(
         width / 2,
         y,
-        `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded} (needed ${remaining} more)`,
+        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded} (needed ${remaining} more)`,
         {
           fontFamily: "Atari",
           fontSize: "12px",
@@ -223,7 +225,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 18;
 
     this.add
-      .text(width / 2, y, `Score: ${this.data.score}`, {
+      .text(width / 2, y, `Score: ${this.gameOverData.score}`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -264,9 +266,9 @@ export class GameOverScene extends Phaser.Scene {
     y += 35;
 
     // Quit reason
-    if (this.data.deathReason) {
+    if (this.gameOverData.deathReason) {
       this.add
-        .text(width / 2, y, this.data.deathReason, {
+        .text(width / 2, y, this.gameOverData.deathReason, {
           fontFamily: "Atari",
           fontSize: "14px",
           color: "#ffcc66",
@@ -280,7 +282,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         width / 2,
         y,
-        `Cave ${this.data.caveNumber}: "${this.data.caveName}"`,
+        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
         {
           fontFamily: "Atari",
           fontSize: "14px",
@@ -292,7 +294,7 @@ export class GameOverScene extends Phaser.Scene {
 
     // Stats
     this.add
-      .text(width / 2, y, `Time played: ${this.data.timeSpent}s`, {
+      .text(width / 2, y, `Time played: ${this.gameOverData.timeSpent}s`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -304,7 +306,7 @@ export class GameOverScene extends Phaser.Scene {
       .text(
         width / 2,
         y,
-        `Diamonds: ${this.data.diamondsCollected}/${this.data.diamondsNeeded}`,
+        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded}`,
         {
           fontFamily: "Atari",
           fontSize: "12px",
@@ -315,7 +317,7 @@ export class GameOverScene extends Phaser.Scene {
     y += 18;
 
     this.add
-      .text(width / 2, y, `Score: ${this.data.score}`, {
+      .text(width / 2, y, `Score: ${this.gameOverData.score}`, {
         fontFamily: "Atari",
         fontSize: "12px",
         color: "#cccccc",
@@ -343,17 +345,17 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   private onRetryOrNext(): void {
-    if (this.data.result === "victory") {
+    if (this.gameOverData.result === "victory") {
       // Go to next cave
-      const nextCave = this.data.caveNumber < 20 ? this.data.caveNumber + 1 : 1;
+      const nextCave = this.gameOverData.caveNumber < 20 ? this.gameOverData.caveNumber + 1 : 1;
       this.scene.start("GameScene", { caveNumber: nextCave });
     } else {
       // Retry same cave
-      this.scene.start("GameScene", { caveNumber: this.data.caveNumber });
+      this.scene.start("GameScene", { caveNumber: this.gameOverData.caveNumber });
     }
   }
 
   private onBackToMenu(): void {
-    this.scene.start("WelcomeScene", { lastCave: this.data.caveNumber });
+    this.scene.start("WelcomeScene", { lastCave: this.gameOverData.caveNumber });
   }
 }

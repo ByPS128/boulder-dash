@@ -19,6 +19,7 @@ import {
 } from "../core/types";
 import { CaveDefinition } from "../core/CaveDefinition";
 import { CaveLoader } from "../levels/CaveLoader";
+import { Rng } from "../core/Rng";
 import { sessionStats } from "../core/SessionStats";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { GameOverData } from "./GameOverScene";
@@ -43,7 +44,7 @@ const VISIBLE_H = 16;
 const TILE = 16;
 
 // Fixed-step tick (matches Kaboom version feel)
-const SPEED = 0.4;
+const SPEED = 0.15;
 
 // Spritesheet frames (spritesheet_A.png)
 const FRAMES = {
@@ -53,6 +54,8 @@ const FRAMES = {
   DIRT: 33,
   BOULDER: 35,
   DIAMOND: 40,
+  MAGICWALL: 50, // řádek 6 v listu (od 1), 4 framy animace
+  AMOEBA: 60, // řádky 7–8 v listu (od 1), 4 framy animace
   FIREFLY: 80,
   BUTTERFLY: 90,
   EXPLOSION: 100,
@@ -71,6 +74,8 @@ const ANIMS = {
   FIREFLY: "firefly_anim",
   BUTTERFLY: "butterfly_anim",
   DIAMOND: "diamond_anim",
+  AMOEBA: "amoeba_anim",
+  MAGICWALL: "magicwall_anim",
 } as const;
 
 // Extra mechanics (Boulder Dash-like)
@@ -142,10 +147,15 @@ export class GameScene extends Phaser.Scene {
   // Timer
   private timeLimit = 0;
   private timeRemaining = 0;
-  private gameStartTime = 0;
 
   private stepAcc = 0;
   private tickCount = 0;
+  // Herní čas v sekundách – narůstá jen když hra běží (ne během pauzy/dialogů).
+  // Používá se místo Date.now(), aby pauza nezkreslovala časování animací ani statistiky.
+  private gameTime = 0;
+  // Deterministický PRNG (autentický algoritmus Boulder Dash) pro běhové náhody:
+  // pravděpodobnost tlačení balvanu a růst amoeby. Seedován per jeskyně.
+  private rng!: Rng;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   // Additional keys
@@ -205,7 +215,8 @@ export class GameScene extends Phaser.Scene {
     this.diamondsNeeded = cave.diamondsNeeded;
     this.timeLimit = cave.timeLimit;
     this.timeRemaining = cave.timeLimit;
-    this.gameStartTime = Date.now() / 1000;
+    // PRNG seedujeme číslem jeskyně → stejná jeskyně má reprodukovatelný průběh náhod.
+    this.rng = new Rng(this.caveNumber);
 
     // Setup input
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -250,6 +261,9 @@ export class GameScene extends Phaser.Scene {
     ) {
       return;
     }
+
+    // Herní čas běží jen tady (za guardem pauzy/dialogů), takže ho pauza nezvyšuje.
+    this.gameTime += delta;
 
     this.stepAcc += delta;
     this.updateCamera(delta);
@@ -341,6 +355,23 @@ export class GameScene extends Phaser.Scene {
       key: ANIMS.DIAMOND,
       frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.DIAMOND, end: FRAMES.DIAMOND + 7 }),
       frameRate: 12,
+      repeat: -1,
+    });
+
+    // Amoeba (4 framy). Pozn.: pokud se sprity nečekaně dělí na 2 řádky listu,
+    // bude potřeba framy upravit na nesouvislé (např. 60,61,70,71).
+    this.anims.create({
+      key: ANIMS.AMOEBA,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.AMOEBA, end: FRAMES.AMOEBA + 3 }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
+    // Magic wall – animovaná (4 framy, řádek 6 v listu).
+    this.anims.create({
+      key: ANIMS.MAGICWALL,
+      frames: this.anims.generateFrameNumbers("bd", { start: FRAMES.MAGICWALL, end: FRAMES.MAGICWALL + 3 }),
+      frameRate: 8,
       repeat: -1,
     });
   }
@@ -511,25 +542,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnMagicWall(x: number, y: number) {
-    // Sprite frame for Magic Wall isn't defined in the original JS sample; keep BRICKS frame by default.
+    // Magic wall: animovaný sprite (4 framy z řádku 6 listu).
     const ent: MagicWallEntity = {
       kind: CellKind.MagicWall,
       pos: V(x, y),
-      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.BRICKS).setOrigin(0, 0).setDepth(5),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.MAGICWALL).setOrigin(0, 0).setDepth(5),
       activeUntilTick: 0,
     };
     this.setCell(x, y, ent);
+    ent.sprite!.play(ANIMS.MAGICWALL);
     return ent;
   }
 
   private spawnAmoeba(x: number, y: number) {
-    // Amoeba frame not specified; reuse DIAMOND frame as placeholder until spritesheet index is known.
+    // Amoeba: animovaný sprite (framy z řádků 7–8 listu).
     const ent: CellEntity = {
       kind: CellKind.Amoeba,
       pos: V(x, y),
-      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.DIAMOND).setOrigin(0, 0).setDepth(15),
+      sprite: this.add.sprite(x * TILE, y * TILE, "bd", FRAMES.AMOEBA).setOrigin(0, 0).setDepth(15),
     };
     this.setCell(x, y, ent);
+    ent.sprite!.play(ANIMS.AMOEBA);
     return ent;
   }
 
@@ -692,11 +725,9 @@ const belowBoulder = addV(target, DIR.DOWN);
       }
     }
 
-    // Enter exit
-    if (obj && obj.kind === CellKind.Exit && this.exitOpened) {
-      this.onVictory();
-      return;
-    }
+    // Vstup do exitu vyhodnotíme až PO přesunu – jinak by se zavolalo onVictory()
+    // a return ještě před posunem spritu a Rockford by zůstal stát před exitem.
+    const enteringExit = !!obj && obj.kind === CellKind.Exit && this.exitOpened;
 
     // move
     if (obj && obj !== this.exit) {
@@ -707,11 +738,16 @@ const belowBoulder = addV(target, DIR.DOWN);
     this.setCell(this.player.pos.x, this.player.pos.y, null);
     this.setCell(target.x, target.y, this.player);
     this.playRockfordAnimByDir(dir);
+
+    // Teď, když Rockford vizuálně vstoupil na exit, ukončíme level vítězstvím.
+    if (enteringExit) {
+      this.onVictory();
+    }
   }
 
   private playRockfordAnimByDir(dir: Vec2) {
-    // Reset idle animation timer when moving
-    this.idleStartTime = Date.now() / 1000;
+    // Reset časovače idle animace při pohybu (herní čas, ne reálný).
+    this.idleStartTime = this.gameTime;
     this.idleAnimIndex = 0;
     
     if (eqV(dir, DIR.LEFT)) {
@@ -726,35 +762,32 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private updateIdleAnimation() {
-    const currentTime = Date.now() / 1000;
-    
-    // Initialize timer on first idle
+    // Herní čas místo Date.now() → během pauzy se idle animace neposouvá.
+    const currentTime = this.gameTime;
+
+    // Inicializace časovače při prvním idle
     if (this.idleStartTime === 0) {
       this.idleStartTime = currentTime;
       this.idleAnimIndex = 0;
     }
     
-    // Check if it's time to switch to next idle animation
+    // Rotace tří idle animací – přepnutí každých IDLE_ANIM_DURATION sekund.
+    const idleAnims = [ANIMS.IDLE1, ANIMS.IDLE2, ANIMS.IDLE3];
     const elapsed = currentTime - this.idleStartTime;
-    const newIndex = Math.floor(elapsed / this.IDLE_ANIM_DURATION) % 3;
-    
-    if (newIndex !== this.idleAnimIndex) {
-      this.idleAnimIndex = newIndex;
-      const idleAnims = [ANIMS.IDLE1, ANIMS.IDLE2, ANIMS.IDLE3];
-      this.player.sprite!.play(idleAnims[this.idleAnimIndex], true);
-    } else {
-      // Keep current animation playing
-      const idleAnims = [ANIMS.IDLE1, ANIMS.IDLE2, ANIMS.IDLE3];
-      const currentAnim = this.player.sprite!.anims.getName();
-      if (currentAnim !== idleAnims[this.idleAnimIndex]) {
-        this.player.sprite!.play(idleAnims[this.idleAnimIndex], true);
-      }
+    this.idleAnimIndex = Math.floor(elapsed / this.IDLE_ANIM_DURATION) % idleAnims.length;
+    const anim = idleAnims[this.idleAnimIndex]!; // index je vždy v rozsahu (modulo délky pole)
+
+    // Přehrát jen při skutečné změně, jinak by Phaser pořád restartoval první frame.
+    if (this.player.sprite!.anims.getName() !== anim) {
+      this.player.sprite!.play(anim, true);
     }
   }
 
   private canPush() {
-    // Kaboom parity: a short "struggle" before pushing.
-    if (Phaser.Math.Between(0, 5) > 1 || this.player.pushAttempts < 2) {
+    // Krátký "odpor" před tlačením (parita s Kaboom verzí).
+    // Deterministický PRNG místo Phaser.Math.Between → reprodukovatelné chování věrné
+    // originálu, kde pravděpodobnost tlačení vychází ze stejného generátoru.
+    if (this.rng.nextInt(6) > 1 || this.player.pushAttempts < 2) {
       this.player.pushAttempts++;
       return false;
     }
@@ -863,19 +896,20 @@ const belowBoulder = addV(target, DIR.DOWN);
         this.setCell(newPos.x, newPos.y, m);
         m.moveProcessed = true;
 
-        this.fallingObjectImpactedOn(crossing);
+        // `m` is the falling object that just moved into `crossing`'s cell,
+        // so pass it directly instead of scanning the whole grid for it.
+        this.fallingObjectImpactedOn(crossing, m);
       }
     }
   }
 
-  private fallingObjectImpactedOn(obj: CellEntity | null) {
+  private fallingObjectImpactedOn(obj: CellEntity | null, fallingObj: MoveableEntity) {
     if (!obj) return;
 
     if (obj.kind === CellKind.Player) {
-      const fallingObj = this.findFallingObjectAt(this.player.pos);
-      if (fallingObj?.kind === CellKind.Boulder) {
+      if (fallingObj.kind === CellKind.Boulder) {
         this.deathReason = "Crushed by falling boulder";
-      } else if (fallingObj?.kind === CellKind.Diamond) {
+      } else if (fallingObj.kind === CellKind.Diamond) {
         this.deathReason = "Crushed by falling diamond";
       } else {
         this.deathReason = "Crushed by falling object";
@@ -894,18 +928,6 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.boomButterfly(obj as EnemyEntity, isChainExplosion);
       return;
     }
-  }
-
-  private findFallingObjectAt(pos: Vec2): MoveableEntity | null {
-    for (let y = 0; y < this.gridH; y++) {
-      for (let x = 0; x < this.gridW; x++) {
-        const obj = this.grid[y]![x];
-        if (obj && isMoveable(obj) && eqV(obj.pos, pos) && obj.isFalling) {
-          return obj;
-        }
-      }
-    }
-    return null;
   }
 
   private handleMagicWallDrop(m: MoveableEntity, wall: MagicWallEntity) {
@@ -1181,7 +1203,8 @@ const belowBoulder = addV(target, DIR.DOWN);
         const o = this.getCell(t);
         if (o === null || o.kind === CellKind.Dirt) {
           hasAnyGrowSpace = true;
-          if (Math.random() < AMOEBA_GROW_CHANCE) {
+          // Deterministický PRNG místo Math.random() → reprodukovatelný růst amoeby.
+          if (this.rng.chance(AMOEBA_GROW_CHANCE)) {
             candidates.push({ from: p, to: t });
           }
         }
@@ -1211,8 +1234,8 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private processEnemyCollisionsWithAmoeba() {
-    // Placeholder hook; amoeba not currently spawned in your maps.
-    // Implemented to keep parity with your JS structure.
+    // Amoeba zabíjí firefly/butterfly při dotyku – kontrola 4-okolí každého nepřítele.
+    // (Amoeba je v jeskyních 8 a 16 i v ladící scéně TEST: Amoeba.)
     for (let y = 0; y < this.gridH; y++) {
       for (let x = 0; x < this.gridW; x++) {
         const obj = this.grid[y]![x];
@@ -1526,7 +1549,7 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.destroyPauseOverlay();
     }
 
-    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeSpent = Math.floor(this.gameTime);
 
     this.activeDialog = new ConfirmDialog(this, {
       title: "⚠️ RESTART LEVEL?",
@@ -1558,7 +1581,7 @@ const belowBoulder = addV(target, DIR.DOWN);
       this.destroyPauseOverlay();
     }
 
-    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeSpent = Math.floor(this.gameTime);
 
     this.activeDialog = new ConfirmDialog(this, {
       title: "⚠️ QUIT LEVEL?",
@@ -1587,7 +1610,7 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private quitLevel(): void {
-    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeSpent = Math.floor(this.gameTime);
 
     sessionStats.addAttempt({
       caveNumber: this.caveNumber,
@@ -1620,7 +1643,7 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private showDeathDialog(): void {
-    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeSpent = Math.floor(this.gameTime);
 
     sessionStats.addAttempt({
       caveNumber: this.caveNumber,
@@ -1657,7 +1680,7 @@ const belowBoulder = addV(target, DIR.DOWN);
   private onVictory(): void {
     this.gameState = GameState.VICTORY;
 
-    const timeSpent = Math.floor((Date.now() / 1000) - this.gameStartTime);
+    const timeSpent = Math.floor(this.gameTime);
     const timeBonus = Math.max(0, Math.floor(this.timeRemaining * this.cave.timeBonus));
     const finalScore = this.score + timeBonus;
 

@@ -7,6 +7,9 @@ import { sessionStats } from "../core/SessionStats";
  */
 export class WelcomeScene extends Phaser.Scene {
   private selectedCave = 1;
+  // Pořadí jeskyní v menu (test scény vepředu) + aktuální index v něm.
+  private menuOrder: number[] = [];
+  private menuIndex = 0;
   private caveNumberText!: Phaser.GameObjects.Text;
   private caveInfoText!: Phaser.GameObjects.Text;
   private bestScoreText!: Phaser.GameObjects.Text;
@@ -240,13 +243,21 @@ export class WelcomeScene extends Phaser.Scene {
     this.rightKey.on("down", () => this.changeCave(1));
     this.enterKey.on("down", () => this.startGame());
 
+    // Pořadí menu z loaderu (test scény vepředu). Index nastavíme na aktuální výběr.
+    this.menuOrder = CaveLoader.getMenuOrder();
+    const idx = this.menuOrder.indexOf(this.selectedCave);
+    this.menuIndex = idx >= 0 ? idx : 0;
+    this.selectedCave = this.menuOrder[this.menuIndex]!;
+
     this.updateCaveDisplay();
   }
 
   private changeCave(delta: number): void {
-    this.selectedCave += delta;
-    if (this.selectedCave < 1) this.selectedCave = 20;
-    if (this.selectedCave > 20) this.selectedCave = 1;
+    // Listujeme podle pořadí menu (s wraparoundem), ne podle čísla jeskyně –
+    // díky tomu jsou test scény na začátku a čísla nemusí být souvislá.
+    const n = this.menuOrder.length;
+    this.menuIndex = (this.menuIndex + delta + n) % n;
+    this.selectedCave = this.menuOrder[this.menuIndex]!;
     this.updateCaveDisplay();
   }
 
@@ -315,7 +326,7 @@ export class WelcomeScene extends Phaser.Scene {
     const idleAnims = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
     
     const playNextIdle = () => {
-      const animKey = idleAnims[this.idleAnimIndex];
+      const animKey = idleAnims[this.idleAnimIndex]!; // index je vždy v rozsahu (modulo délky)
       this.rockfordLeftSprite.play(animKey);
       this.rockfordRightSprite.play(animKey);
       

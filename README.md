@@ -1,22 +1,181 @@
-# Boulder Dash (Phaser 3 + TypeScript)
+# Boulder Dash — remake v Phaser 3 + TypeScript
 
-## Quick start
+Webový remake hry **Boulder Dash**, kterou původně napsali Peter Liepa a Chris Gray
+**na Atari 800** a vydala First Star Software v roce 1984. Projekt cílí na autentický
+vzhled a pocit **Atari 8-bit (800 XL / 130 XE)** — proto atarijský font, balík
+atarijských fontů a originální C64 disassembly soubory uložené v rootu repa jako
+referenční materiál.
+
+> Referenci k herním pravidlům, historická fakta, originální algoritmus generování
+> jeskyní a zdroje disassembly najdeš v **[CLAUDE.md](./CLAUDE.md)** — to je master
+> referenční dokument tohoto projektu.
+
+---
+
+## Technologie
+
+| Vrstva   | Volba                               | Poznámka |
+|----------|-------------------------------------|----------|
+| Engine   | [Phaser 3](https://phaser.io) 3.80  | Scény, sprity, animace, vstup, kamera. |
+| Jazyk    | TypeScript 5.5                      | Typovaný model entit (union `CellEntity`). |
+| Build    | Vite 5                              | Dev server + produkční bundle (ESM). |
+| Render   | `pixelArt`, `roundPixels`, bez AA   | Ostré 16×16 retro dlaždice; jen celočíselný zoom. |
+| Font     | `resources/atari.ttf` (`@font-face`)| Autentický vzhled Atari 800 XL UI. |
+
+Žádný backend, žádný testovací framework — čistě klientská hra.
+
+**Logické plátno:** `28 × 16` dlaždic × `16 px` = **448 × 256 px** (`Scale.FIT`,
+centrované). Dlaždice 16×16 odpovídají Liepovým zdvojnásobeným atarijským tiles.
+
+## Rychlý start
+
 ```bash
 npm i
-npm run dev
+npm run dev      # vývojový server Vite
+npm run build    # produkční build
+npm run preview  # náhled buildu
 ```
 
-## Assets
-Copy your existing Kaboom sprite sheet here:
+Otevři URL, kterou Vite vypíše. Atarijský font se načte před startem Phaseru
+(viz `src/main.ts`).
 
-`resources/spritesheet_A.png`
+## Ovládání
 
-(unchanged name, unchanged frames)
+| Klávesa        | Akce |
+|----------------|------|
+| Šipky          | Pohyb Rockforda (kopání hlíny, sběr diamantů, tlačení balvanů vodorovně) |
+| `P`            | Pauza / pokračovat |
+| `R`            | Restart úrovně (s potvrzením) |
+| `ESC`          | Opustit úroveň (s potvrzením) |
 
-## Controls
-Arrow keys
+## Struktura projektu
 
-## Notes
-- This is a direct port of the *current zip* (it contains one cave map and no enemies in that map).
-- Implemented: tile grid, dirt eating, diamond collection + score, boulder pushing, gravity + rolling, exit opens after collecting required diamonds.
-- Not yet ported from your Kaboom code: firefly/butterfly/amoeba/magic wall, explosions, time/score UI from original.
+```
+index.html                  @font-face + preload fontu; připojí #app
+src/
+  main.ts                   čeká na fonty → CaveLoader.loadAll() → new Phaser.Game
+  core/
+    types.ts                Vec2/DIR helpery, CellKind, union CellEntity, config obtížnosti
+    CaveDefinition.ts       Rozhraní metadat jeskyně + úpravy podle obtížnosti
+    SessionStats.ts         Pokusy per jeskyně, best score; persistováno do localStorage
+  levels/
+    CaveLoader.ts           Fetchne levels/caveNN.txt, validuje, přidá UI řádek
+  scenes/
+    WelcomeScene.ts         Výběr jeskyně (1–20), best score, animovaný Rockford
+    GameScene.ts            Jádro herní smyčky a simulace (viz níže)
+    GameOverScene.ts        Výsledek victory / death / quit + time bonus
+  ui/
+    ConfirmDialog.ts        Znovupoužitelný potvrzovací dialog Y/N
+levels/cave01..20.txt       ASCII mapy jeskyní (40×22)
+resources/                  spritesheet_A.png, atari.ttf, balík atarijských fontů
+CLAUDE.md                   Master pravidla & reference (číst první)
+*.asm / *.mhtml             C64 Boulder Dash disassembly (reference)
+```
+
+## Architektura a tok dat
+
+```
+index.html ─ font ─▶ main.ts ─▶ CaveLoader.loadAll() ─▶ new Phaser.Game
+                                   scény: WelcomeScene → GameScene → GameOverScene
+                                                              (+ ui/ConfirmDialog)
+```
+
+- **CaveLoader** fetchne `levels/caveNN.txt`, ořeže BOM, zvaliduje 40×22 a
+  **přidá jeden prázdný řádek navrch** (proto `BOARD_HEIGHT = 23`), aby vznikl prostor
+  pro horní UI lištu. Diamanty/čas/název per jeskyně přichází z hardcoded mapy
+  `CAVE_CONFIG`.
+- **SessionStats** je singleton persistovaný do `localStorage` pod klíčem
+  `boulder-dash-stats` (pokusy, best score, flagy dokončení).
+
+## Simulační model (ta důležitá část)
+
+`GameScene` běží **s fixním krokem**, odděleně od render FPS:
+
+- `update()` akumuluje `delta` do `stepAcc` a spouští `step()` každých
+  `SPEED = 0.15 s` (~6,6 ticků/s). Zobrazený **časovač** běží v reálném čase.
+- Každý `step()` má **pevné pořadí fází** — právě toto pořadí drží fyziku správnou:
+
+  ```
+  tickCount++
+  resetMovingFlags()                          // vyčistí inMove[] + moveProcessed
+  rockfordVacated.clear()
+  moveRockford()
+  markBouldersToMove → markFireflies → markButterflies   // fáze PLÁN
+  moveBoulders → moveFireflies → moveButterflies          // fáze VÝKON
+  processAmoeba()
+  processRockfordCollisionsWithEnemies()
+  processEnemyCollisionsWithAmoeba()
+  mark…ToMove ×3                              // přeplánování pro příští tick
+  ```
+
+### Klíčové mechanismy
+
+- **Dvě mřížky.** `grid[][]` drží entity; `inMove[][]` je *rezervační* mřížka.
+  Fáze `mark…` rozhodne, kam každý balvan/diamant spadne nebo se skutálí, a
+  zarezervuje cílovou buňku; fáze `move…` provede pohyb jen pokud
+  `inMove[ny][nx] === self`. Tím se řeší dva padající objekty soupeřící o stejnou
+  buňku — klasický problém cell-based Boulder Dashe.
+- **`rockfordVacated`** — buňky, které Rockford opustil v tomto ticku. Balvany nad
+  nimi **nezačnou** padat okamžitě (`markBouldersToMove` je přeskočí), což dává
+  1-tickové okno na únik věrné originálu.
+- **Gravitace a skluz** (`markBouldersToMove`): pad rovně → jinak skluz vlevo
+  (priorita) → skluz vpravo, ale jen když je objekt pod ním `isRounded`
+  (balvan/diamant) a buňka do strany i buňka pod ní jsou prázdné. Iteruje zdola nahoru.
+- **Magic wall** (`handleMagicWallDrop`): *padající* objekt projde a konvertuje se
+  balvan↔diamant; aktivní po `MAGIC_WALL_ACTIVE_TICKS = 200`; objekt zmizí, pokud je
+  buňka pod zdí obsazená.
+
+## Formát souboru jeskyně
+
+Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
+
+| Znak | Dlaždice        | Znak | Dlaždice           |
+|------|-----------------|------|--------------------|
+| `=`  | Titanová zeď    | `S`  | Spawn Rockforda    |
+| `-`  | Cihlová zeď     | `E`  | Exit               |
+| `.`  | Hlína           | `O`  | Firefly            |
+| ` `  | Prázdný prostor | `X`  | Butterfly          |
+| `*`  | Balvan          | `P`  | Magic wall         |
+| `+`  | Diamant         | `A`  | Amoeba             |
+
+## Aktuální stav
+
+**Hotovo**
+- Mřížka dlaždic, sledování/scroll kamery, spawn animace, win/lose flow.
+- Kopání hlíny, sběr diamantů + skóre (10 / 15 po otevření exitu), exit se otevře
+  po nasbírání potřebných diamantů.
+- Fyzika balvanů a diamantů: gravitace, skluz, tlačení (vodorovně).
+- Fireflies (po směru hodinových ručiček) a butterflies (proti směru): navigace,
+  smrt padajícím balvanem/diamantem, exploze 3×3; butterfly dropne 9 diamantů jen při
+  přímém zabití (ne při řetězové explozi).
+- Konverze magic wall; růst/přerůstání/udušení amoeby (přibližné, viz níže).
+- HUD času, skóre, potřebných diamantů; dialogy pauza/restart/quit.
+- Statistiky session (best score, dokončení) v `localStorage`.
+- Dedikované animované sprity amoeby (framy 60–63) a magic wall (50–53).
+- Deterministický PRNG `src/core/Rng.ts` (věrný překlad 6502 rutiny `PseudoRandom`)
+  pro herní náhody – tlačení balvanu (`canPush`) i růst amoeby; reprodukovatelné a
+  seedované per jeskyně.
+- Herní čas (`gameTime`) místo `Date.now()` – pauza nezkresluje animace ani statistiky.
+- Ladící TEST scény na začátku menu (viz `TEST_CAVES` v `CaveLoader`).
+
+**Částečné / placeholder**
+- Růst amoeby je zatím přibližný a rychlý; autentická mechanika (měřený růst,
+  práh 200→balvany, uzavřená→diamanty) se portuje z disassembly (`__ProcessAmoeba__`).
+- Sprity amoeby zatím přesně neodpovídají Atari předloze (k doladění).
+- Magic wall animuje pořád; v originále „mele" jen když je aktivní (k navázání na
+  `activeUntilTick`).
+- Systém obtížnosti je připravený (`types.ts`), ale **vypnutý**
+  (`difficultySystemEnabled = false`).
+
+**Odchylky od originální atarijské hry**
+- Jeskyně jsou **ručně kreslené ASCII mapy** s vlastními názvy ("Intro", "Rooms", …),
+  **ne** originálních 16 jeskyní A–P + 4 intermission a **ne** generované Liepovým
+  pseudonáhodným generátorem. Implementace tohoto generátoru (+ originálních
+  32-bajtových hlaviček jeskyní) je největší krok k autentickému atarijskému portu.
+  Algoritmus viz CLAUDE.md.
+
+## Poděkování a historie
+
+Boulder Dash © Peter Liepa a Chris Gray, First Star Software (1984). Původně vyvinuto
+na **Atari 800**. Toto je nekomerční fanouškovský remake. Plnou historii a referenční
+odkazy najdeš v CLAUDE.md.

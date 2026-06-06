@@ -31,6 +31,22 @@ const CAVE_CONFIG: Record<
 };
 
 /**
+ * Ladící (TEST) scény. Zobrazují se na ZAČÁTKU menu, ať jsou hned po ruce.
+ * Až bude mechanika odladěná, stačí položku odsud smazat a z menu zmizí.
+ * Čísla od 101 výš, aby nekolidovala s ostrými jeskyněmi 1–20.
+ */
+const TEST_CAVES: {
+  number: number;
+  file: string;
+  name: string;
+  diamonds: number;
+  time: number;
+}[] = [
+  { number: 101, file: "test_amoeba", name: "TEST: Amoeba", diamonds: 1, time: 999 },
+  { number: 102, file: "test_magic_wall", name: "TEST: Magic Wall", diamonds: 1, time: 999 },
+];
+
+/**
  * CaveLoader - loads cave definitions from .txt files
  */
 export class CaveLoader {
@@ -74,8 +90,31 @@ export class CaveLoader {
       }
     }
 
+    // Ladící scény (na začátku menu). Snadno odstranitelné – viz TEST_CAVES.
+    for (const t of TEST_CAVES) {
+      try {
+        const map = await this.loadCaveFileByName(t.file);
+        const cave: CaveDefinition = {
+          caveNumber: t.number,
+          name: t.name,
+          width: 40,
+          height: 23, // 22 original + 1 empty row for UI space
+          map,
+          diamondsNeeded: t.diamonds,
+          timeLimit: t.time,
+          diamondValue: 10,
+          diamondBonusValue: 15,
+          timeBonus: 5,
+        };
+        this.caves.set(t.number, cave);
+        console.log(`Loaded test cave ${t.number}: ${cave.name}`);
+      } catch (error) {
+        console.error(`Failed to load test cave ${t.number}:`, error);
+      }
+    }
+
     this.loaded = true;
-    console.log(`All caves loaded (${this.caves.size}/20)`);
+    console.log(`All caves loaded (${this.caves.size} total)`);
   }
 
   /**
@@ -83,8 +122,16 @@ export class CaveLoader {
    */
   private static async loadCaveFile(caveNumber: number): Promise<string[]> {
     const paddedNumber = caveNumber.toString().padStart(2, "0");
-    const path = `levels/cave${paddedNumber}.txt`;
+    return this.fetchCaveLines(`levels/cave${paddedNumber}.txt`);
+  }
 
+  /** Na\u010Dte lad\u00EDc\u00ED sc\u00E9nu podle n\u00E1zvu souboru (bez p\u0159\u00EDpony, ze slo\u017Eky levels/). */
+  private static async loadCaveFileByName(stem: string): Promise<string[]> {
+    return this.fetchCaveLines(`levels/${stem}.txt`);
+  }
+
+  /** St\u00E1hne a naparsuje soubor jeskyn\u011B: o\u0159e\u017Ee BOM, zvaliduje 40\u00D722, p\u0159id\u00E1 UI \u0159\u00E1dek. */
+  private static async fetchCaveLines(path: string): Promise<string[]> {
     const response = await fetch(path);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${path}: ${response.status}`);
@@ -100,17 +147,13 @@ export class CaveLoader {
 
     // Validate dimensions
     if (lines.length !== 22) {
-      console.warn(
-        `Cave ${caveNumber}: Expected 22 lines, got ${lines.length}`
-      );
+      console.warn(`${path}: Expected 22 lines, got ${lines.length}`);
     }
 
     lines.forEach((line, idx) => {
       if (line.length !== 40) {
         console.warn(
-          `Cave ${caveNumber} line ${idx + 1}: Expected 40 chars, got ${
-            line.length
-          }`
+          `${path} line ${idx + 1}: Expected 40 chars, got ${line.length}`
         );
       }
     });
@@ -141,6 +184,17 @@ export class CaveLoader {
     return Array.from(this.caves.values()).sort(
       (a, b) => a.caveNumber - b.caveNumber
     );
+  }
+
+  /**
+   * Pořadí jeskyní v menu: nejdřív ladící (TEST) scény, pak ostré jeskyně 1–20.
+   * WelcomeScene podle tohoto pole listuje – test scény jsou tak hned na začátku.
+   */
+  static getMenuOrder(): number[] {
+    const realCaves = Object.keys(CAVE_CONFIG)
+      .map(Number)
+      .sort((a, b) => a - b);
+    return [...TEST_CAVES.map((t) => t.number), ...realCaves];
   }
 
   /**
