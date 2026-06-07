@@ -417,6 +417,29 @@ InitialDiamondValue, ExtraDiamondValue, 5× seed, 5× DiamondsNeeded, 5× CaveTi
 
 ---
 
+## 🖥️ IMPLEMENTAČNÍ REFERENCE (mimo herní pravidla)
+
+Stručný rozcestník k tomu, jak je hra technicky postavená (detaily a aktuální stav
+viz `README.md`):
+
+- **Ostrý Atari font** (`src/ui/AtariFont.ts`): charset z balíku `EightBit-Atari-Fonts-2`
+  (default **ATARIPL**) se při načtení přemaskuje na RGBA (průhledné pozadí) a
+  zaregistruje jako Phaser **RetroFont**. Texty UI píšeme VERZÁLKAMI (charset 0–63 = ASCII 32–95).
+- **Welcome úvod** (`WelcomeScene.ts`): dva Rockfordi „nanosí" písmena BOULDER DASH
+  po mřížce (sokoban-tlačení), levý BOULDE zleva, pravý RDASH zprava; B a H nakonec.
+  Vše laditelné v `INTRO_CFG`. Přerušitelné klávesou.
+- **Rolovací duha** v titulku: barvy `RAINBOW_COLORS` vytažené z `resources/atari-dev-a-1.png`
+  (každá světlá→tmavá), maska = tvar písmen, scroll `tilePositionY`. Historická
+  předloha (DLI raster bars) je v `atari.md`.
+- **Deterministický PRNG** (`src/core/Rng.ts`): věrný překlad rutiny `PseudoRandom`
+  (viz výše); používá se pro `canPush` a růst amoeby, seedovaný per jeskyně.
+- **Spritesheet framy** (`spritesheet_A.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
+  noha vždy končí na zemi); framy 4/9 jsou PRÁZDNÉ (nepoužívat); magic wall 50–53,
+  amoeba 60–63, firefly 80, butterfly 90, explosion 100.
+- **Ladící TEST scény** na začátku menu: pole `TEST_CAVES` v `CaveLoader.ts`.
+
+---
+
 **POSLEDNÍ KONTROLNÍ OTÁZKA PŘED KAŽDOU ODPOVĚDÍ:**
 "Přečetl jsem si .ai-rules.md a postupoval podle něj?"
 

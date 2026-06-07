@@ -27,8 +27,8 @@ const CELL = (TITLE_SIZE / 8) * 8; // mřížka = velikost písmene = 24 px
 /**
  * Konfigurace úvodní animace (nanášení titulku Rockfordy). Drženo pohromadě,
  * ať se to snadno ladí.
- * - tickMs: kadence mřížky (1 buňka za tick) → celková rychlost. Hra je ~225 ms
- *   na 24px buňku; tady je to lehce svižnější.
+ * - tickMs: kadence mřížky (1 buňka za tick) → celková rychlost. Pro orientaci:
+ *   herní tempo by bylo ~225 ms na 24px buňku; tady je úvod o dost svižnější.
  * - stepMin/MaxMs: vizuální délka jednoho kroku (< tickMs → vzniká „stutter",
  *   takže každý krok netrvá stejně, jako ve hře).
  * - pushStruggleChance: šance, že tlačení 1 tick „zadrhne" (Rockford postojí).

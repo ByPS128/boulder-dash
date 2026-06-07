@@ -20,7 +20,7 @@ referenční materiál.
 | Jazyk    | TypeScript 5.5                      | Typovaný model entit (union `CellEntity`). |
 | Build    | Vite 5                              | Dev server + produkční bundle (ESM). |
 | Render   | `pixelArt`, `roundPixels`, bez AA   | Ostré 16×16 retro dlaždice; jen celočíselný zoom. |
-| Font     | `resources/atari.ttf` (`@font-face`)| Autentický vzhled Atari 800 XL UI. |
+| Font     | Atari **bitmap** font (RetroFont)   | Ostrý charset (ATARIPL) z balíku, maskovaný za běhu — `src/ui/AtariFont.ts`. |
 
 Žádný backend, žádný testovací framework — čistě klientská hra.
 
@@ -58,16 +58,21 @@ src/
     types.ts                Vec2/DIR helpery, CellKind, union CellEntity, config obtížnosti
     CaveDefinition.ts       Rozhraní metadat jeskyně + úpravy podle obtížnosti
     SessionStats.ts         Pokusy per jeskyně, best score; persistováno do localStorage
+    Rng.ts                  Deterministický PRNG (věrný překlad 6502 PseudoRandom)
   levels/
-    CaveLoader.ts           Fetchne levels/caveNN.txt, validuje, přidá UI řádek
+    CaveLoader.ts           Fetchne levels/caveNN.txt, validuje, přidá UI řádek; TEST_CAVES
   scenes/
-    WelcomeScene.ts         Výběr jeskyně (1–20), best score, animovaný Rockford
+    WelcomeScene.ts         Úvod: bitmap font, carry intro (2 Rockfordi), rolovací duha, výběr jeskyně
     GameScene.ts            Jádro herní smyčky a simulace (viz níže)
     GameOverScene.ts        Výsledek victory / death / quit + time bonus
   ui/
+    AtariFont.ts            Načtení Atari charsetu + runtime maskování → Phaser RetroFont
     ConfirmDialog.ts        Znovupoužitelný potvrzovací dialog Y/N
 levels/cave01..20.txt       ASCII mapy jeskyní (40×22)
-resources/                  spritesheet_A.png, atari.ttf, balík atarijských fontů
+levels/test_*.txt           Ladící TEST scény (amoeba, magic wall)
+resources/                  spritesheet_A.png, balík atarijských fontů (EightBit-Atari-Fonts-2),
+                            atari-dev-a-*.png/gif (předlohy rolovací duhy)
+atari.md                    Poznámky k Atari grafickému kernelu / DLI raster bars (předloha duhy)
 CLAUDE.md                   Master pravidla & reference (číst první)
 *.asm / *.mhtml             C64 Boulder Dash disassembly (reference)
 ```
@@ -86,6 +91,21 @@ index.html ─ font ─▶ main.ts ─▶ CaveLoader.loadAll() ─▶ new Phaser
   `CAVE_CONFIG`.
 - **SessionStats** je singleton persistovaný do `localStorage` pod klíčem
   `boulder-dash-stats` (pokusy, best score, flagy dokončení).
+
+## Úvodní obrazovka (Welcome)
+
+- **Ostrý Atari font** (`src/ui/AtariFont.ts`): charset z balíku
+  `EightBit-Atari-Fonts-2` (default **ATARIPL**) se při načtení **za běhu** přemaskuje
+  na RGBA (bílé glyfy / průhledné pozadí) a zaregistruje jako Phaser **RetroFont** →
+  ostré hrany místo rozpitého TTF. Konfigurovatelné (`ATARI_FONTS`), texty verzálkami.
+- **Carry intro:** dva Rockfordi „nanosí" písmena **BOULDER DASH** po mřížce (24 px) a
+  tlačí je jako balvany (sokoban) – levý staví **BOULDE** zleva, pravý **RDASH** zprava
+  (i R bere ze své strany). Prostřední písmena přijdou z náhodného spodního řádku, Rockford
+  je dotlačí do sloupce, obejde a vytlačí nahoru. **B a H** se dělají nakonec a Rockfordi
+  u nich zůstanou v idle. Vše laditelné v **`INTRO_CFG`**; **přerušitelné** libovolnou klávesou.
+- **Rolovací duha** v titulku: barvy `RAINBOW_COLORS` jsou vytažené ze sloupce předlohy
+  `resources/atari-dev-a-1.png` (každá barva světlá→tmavá, pak další), maskované tvarem
+  písmen a svisle scrollované (Atari raster-bar efekt – viz `atari.md`).
 
 ## Simulační model (ta důležitá část)
 
@@ -148,7 +168,8 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
 - Fireflies (po směru hodinových ručiček) a butterflies (proti směru): navigace,
   smrt padajícím balvanem/diamantem, exploze 3×3; butterfly dropne 9 diamantů jen při
   přímém zabití (ne při řetězové explozi).
-- Konverze magic wall; růst/přerůstání/udušení amoeby (přibližné, viz níže).
+- Konverze magic wall; **autentický růst amoeby** (port `ProcessAmoeba` z disassembly:
+  měřený růst přes PRNG, práh 200 buněk → balvany, uzavřená → diamanty, zabíjení nepřátel).
 - HUD času, skóre, potřebných diamantů; dialogy pauza/restart/quit.
 - Statistiky session (best score, dokončení) v `localStorage`.
 - Dedikované animované sprity amoeby (framy 60–63) a magic wall (50–53).
@@ -157,10 +178,11 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
   seedované per jeskyně.
 - Herní čas (`gameTime`) místo `Date.now()` – pauza nezkresluje animace ani statistiky.
 - Ladící TEST scény na začátku menu (viz `TEST_CAVES` v `CaveLoader`).
+- **Úvodní obrazovka**: ostrý Atari bitmap font (RetroFont), carry intro (2 Rockfordi
+  nanosí titulek, sokoban-tlačení), rolovací duha z předlohy; přerušitelné klávesou
+  (viz sekce *Úvodní obrazovka* výše).
 
 **Částečné / placeholder**
-- Růst amoeby je zatím přibližný a rychlý; autentická mechanika (měřený růst,
-  práh 200→balvany, uzavřená→diamanty) se portuje z disassembly (`__ProcessAmoeba__`).
 - Sprity amoeby zatím přesně neodpovídají Atari předloze (k doladění).
 - Magic wall animuje pořád; v originále „mele" jen když je aktivní (k navázání na
   `activeUntilTick`).
