@@ -23,6 +23,7 @@ import { Rng } from "../core/Rng";
 import { sessionStats } from "../core/SessionStats";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { GameOverData } from "./GameOverScene";
+import { preloadAtariFonts, registerAtariFonts, DEFAULT_FONT } from "../ui/AtariFont";
 
 // Game states
 enum GameState {
@@ -42,6 +43,18 @@ const VISIBLE_W = 28;
 const VISIBLE_H = 16;
 
 const TILE = 16;
+
+// Atari bitmap font (stejný jako v menu) pro HUD i title card.
+const FONT = DEFAULT_FONT;
+
+// Barvy HUD (tinty bitmap textu).
+const HUD = {
+  ok: 0x6cc04a, // splněno / dost času
+  warn: 0xffaa00, // čas dochází
+  danger: 0xff4030, // málo času
+  score: 0xffd23f, // zlatá
+  white: 0xffffff,
+} as const;
 
 // Fixed-step tick (matches Kaboom version feel)
 const SPEED = 0.15;
@@ -178,11 +191,11 @@ export class GameScene extends Phaser.Scene {
   private camOffset: Vec2 = V(0, 0);
   private camWantedPx: Vec2 = V(0, 0);
 
-  // UI
-  private scoreText!: Phaser.GameObjects.Text;
-  private diamondsText!: Phaser.GameObjects.Text;
-  private caveInfoText!: Phaser.GameObjects.Text;
-  private timerText!: Phaser.GameObjects.Text;
+  // UI (bitmap font)
+  private scoreText!: Phaser.GameObjects.BitmapText;
+  private diamondsText!: Phaser.GameObjects.BitmapText;
+  private timerText!: Phaser.GameObjects.BitmapText;
+  private diamondIcon!: Phaser.GameObjects.Sprite;
 
   // Death tracking
   private deathReason: string = "";
@@ -211,6 +224,7 @@ export class GameScene extends Phaser.Scene {
       frameWidth: TILE,
       frameHeight: TILE,
     });
+    preloadAtariFonts(this);
   }
 
   create() {
@@ -248,7 +262,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, BOARD_WIDTH * TILE, BOARD_HEIGHT * TILE);
     this.cameras.main.setZoom(1);
 
+    registerAtariFonts(this);
     this.createUI();
+    this.showTitleCard();
     this.snapCameraToPlayer();
 
     this.initFireflies();
@@ -401,46 +417,81 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createUI() {
-    // All UI on single top row to avoid overflow into game area
-    // Cave info
-    this.caveInfoText = this.add
-      .text(4, 4, `C${this.caveNumber}:${this.cave.name}`, {
-        fontFamily: "Atari",
-        fontSize: "11px",
-        color: "#ffff00",
-      })
+    const W = this.cameras.main.width;
+    // Tmavý pruh pro čitelnost HUD nad hracím polem.
+    this.add
+      .rectangle(0, 0, W, 18, 0x000000, 0.5)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(900);
+
+    // Vlevo: animovaná ikona diamantu + sebráno/potřeba.
+    this.diamondIcon = this.add
+      .sprite(11, 9, "bd", FRAMES.DIAMOND)
       .setScrollFactor(0)
       .setDepth(1000);
-
-    // Diamonds (compact format)
+    this.diamondIcon.play(ANIMS.DIAMOND);
     this.diamondsText = this.add
-      .text(150, 4, `D:0/${this.diamondsNeeded}`, {
-        fontFamily: "Atari",
-        fontSize: "11px",
-        color: "#ffffff",
-      })
+      .bitmapText(23, 1, FONT, `0/${this.diamondsNeeded}`, 16)
       .setScrollFactor(0)
-      .setDepth(1000);
+      .setDepth(1000)
+      .setTint(HUD.white);
 
-    // Timer (compact)
+    // Uprostřed: čas (barevně podle zbývajícího času).
     this.timerText = this.add
-      .text(220, 4, `T:${this.timeLimit}s`, {
-        fontFamily: "Atari",
-        fontSize: "11px",
-        color: "#00ff00",
-      })
+      .bitmapText(W / 2, 1, FONT, `${this.timeLimit}`, 16)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
-      .setDepth(1000);
+      .setDepth(1000)
+      .setTint(HUD.ok);
 
-    // Score (compact)
+    // Vpravo: skóre, 6 míst zarovnaných (neskáče).
     this.scoreText = this.add
-      .text(300, 4, "S:0", {
-        fontFamily: "Atari",
-        fontSize: "11px",
-        color: "#ffffff",
-      })
+      .bitmapText(W - 6, 1, FONT, "000000", 16)
+      .setOrigin(1, 0)
       .setScrollFactor(0)
-      .setDepth(1000);
+      .setDepth(1000)
+      .setTint(HUD.score);
+  }
+
+  /** Title card s názvem jeskyně přes plochu: bílé písmo s černým obrysem, fade. */
+  private showTitleCard() {
+    const cx = this.cameras.main.width / 2;
+    const cy = this.cameras.main.height / 2 - 8;
+    const text = `CAVE ${this.caveNumber}: ${this.cave.name.toUpperCase()}`;
+    const size = 16;
+    const maxW = this.cameras.main.width - 40;
+
+    const card = this.add.container(cx, cy).setScrollFactor(0).setDepth(2000).setAlpha(0);
+    // Obrys: text 8× posunutý v inverzní (černé) barvě, navrch bílá výplň.
+    const O = 2;
+    const offsets = [[-O, -O], [0, -O], [O, -O], [-O, 0], [O, 0], [-O, O], [0, O], [O, O]];
+    for (const [ox, oy] of offsets) {
+      const t = this.make
+        .bitmapText({ x: ox, y: oy, font: FONT, text, size }, false)
+        .setOrigin(0.5, 0.5)
+        .setTint(0x000000)
+        .setMaxWidth(maxW)
+        .setCenterAlign();
+      card.add(t);
+    }
+    const main = this.make
+      .bitmapText({ x: 0, y: 0, font: FONT, text, size }, false)
+      .setOrigin(0.5, 0.5)
+      .setTint(HUD.white)
+      .setMaxWidth(maxW)
+      .setCenterAlign();
+    card.add(main);
+
+    // 0,3 s fade in → ~0,9 s držení → 0,3 s fade out → zničit.
+    this.tweens.add({
+      targets: card,
+      alpha: 1,
+      duration: 300,
+      hold: 900,
+      yoyo: true,
+      onComplete: () => card.destroy(),
+    });
   }
 
   private setCell(x: number, y: number, ent: CellEntity | null) {
@@ -1388,20 +1439,20 @@ const belowBoulder = addV(target, DIR.DOWN);
   }
 
   private updateUI() {
-    this.scoreText.setText(`S:${this.score}`);
-    this.diamondsText.setText(
-      `D:${this.diamondsCollected}/${this.diamondsNeeded}`
-    );
-    this.timerText.setText(`T:${Math.max(0, Math.floor(this.timeRemaining))}s`);
+    // Diamanty: po splnění zezelená text i ikona.
+    const met = this.diamondsCollected >= this.diamondsNeeded;
+    this.diamondsText.setText(`${this.diamondsCollected}/${this.diamondsNeeded}`);
+    this.diamondsText.setTint(met ? HUD.ok : HUD.white);
+    this.diamondIcon.setTint(met ? HUD.ok : HUD.white);
 
-    // Change timer color when low
-    if (this.timeRemaining <= 30) {
-      this.timerText.setColor("#ff0000");
-    } else if (this.timeRemaining <= 60) {
-      this.timerText.setColor("#ffaa00");
-    } else {
-      this.timerText.setColor("#00ff00");
-    }
+    // Skóre: 6 míst zarovnaných (origin vpravo → neskáče).
+    this.scoreText.setText(this.score.toString().padStart(6, "0"));
+
+    // Čas + barva podle zbývajícího času.
+    this.timerText.setText(`${Math.max(0, Math.floor(this.timeRemaining))}`);
+    if (this.timeRemaining <= 30) this.timerText.setTint(HUD.danger);
+    else if (this.timeRemaining <= 60) this.timerText.setTint(HUD.warn);
+    else this.timerText.setTint(HUD.ok);
   }
 
   // Camera

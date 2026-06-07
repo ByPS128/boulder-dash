@@ -436,6 +436,10 @@ viz `README.md`):
 - **Spritesheet framy** (`spritesheet_A.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
   noha vždy končí na zemi); framy 4/9 jsou PRÁZDNÉ (nepoužívat); magic wall 50–53,
   amoeba 60–63, firefly 80, butterfly 90, explosion 100.
+- **In-game HUD** (`GameScene.createUI`/`updateUI`): bitmap font, vlevo ikona diamantu
+  + sebráno/potřeba (zezelená po splnění), uprostřed čas (barevně), vpravo skóre
+  (6 míst, origin vpravo → neskáče). Název jeskyně = **title card** přes plochu
+  (`showTitleCard`): bílé písmo + černý 8-směrný obrys, fade in/hold/out (tween `hold`+`yoyo`).
 - **Ladící TEST scény** na začátku menu: pole `TEST_CAVES` v `CaveLoader.ts`.
 
 ---

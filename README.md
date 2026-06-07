@@ -181,6 +181,10 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
 - **Úvodní obrazovka**: ostrý Atari bitmap font (RetroFont), carry intro (2 Rockfordi
   nanosí titulek, sokoban-tlačení), rolovací duha z předlohy; přerušitelné klávesou
   (viz sekce *Úvodní obrazovka* výše).
+- **In-game HUD** na bitmap fontu: vlevo animovaná ikona diamantu + sebráno/potřeba
+  (zezelená po splnění), uprostřed čas (barevně), vpravo skóre (6 míst, zarovnané);
+  tmavý pruh pro čitelnost. Název jeskyně se ukáže jako **title card** přes plochu
+  (bílé písmo s černým obrysem, fade in/out). Žádné přetékání dlouhých názvů.
 
 **Částečné / placeholder**
 - Sprity amoeby zatím přesně neodpovídají Atari předloze (k doladění).
