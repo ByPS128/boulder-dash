@@ -51,7 +51,7 @@ Otevři URL, kterou Vite vypíše. Atarijský font se načte před startem Phase
 ## Struktura projektu
 
 ```
-index.html                  @font-face + preload fontu; připojí #app
+index.html                  připojí #app a spustí src/main.ts (žádný webový font – font je bitmapový)
 src/
   main.ts                   čeká na fonty → CaveLoader.loadAll() → new Phaser.Game
   core/

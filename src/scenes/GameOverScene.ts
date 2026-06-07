@@ -1,5 +1,20 @@
 import Phaser from "phaser";
 import { AttemptResult } from "../core/SessionStats";
+import { preloadAtariFonts, registerAtariFonts, DEFAULT_FONT } from "../ui/AtariFont";
+
+const FONT = DEFAULT_FONT;
+
+// Barvy (tinty bitmap textu) – ve stylu zbytku hry.
+const COL = {
+  victory: 0xffd23f, // zlatá
+  death: 0xff4030, // červená
+  quit: 0xe0822a, // oranžová
+  name: 0xffffff,
+  info: 0xd9c9a3, // krémová
+  ok: 0x6cc04a, // zelená
+  bad: 0xff6a6a, // světle červená (důvod smrti)
+  score: 0xffd23f,
+} as const;
 
 export interface GameOverData {
   result: AttemptResult;
@@ -16,12 +31,15 @@ export interface GameOverData {
   deathReason?: string; // reason for death (only for death result)
 }
 
+type Line = { text: string; color: number };
+
 /**
- * Game Over scene - displays results after cave completion/failure
+ * Game Over scéna – výsledek po dohrání/nezdaru. Atari bitmap font, ve stylu menu:
+ * outlinovaný nadpis, rotující diamanty po stranách, blikající výzva, u výhry
+ * počítadlo skóre, které se natočí nahoru.
  */
 export class GameOverScene extends Phaser.Scene {
-  // Pozor: pole NESMÍ být pojmenované `data` – Phaser.Scene má vlastní `data`
-  // (DataManager) a stejnojmenné pole by ho zastínilo. Proto `gameOverData`.
+  // Pozor: pole NESMÍ být `data` – Phaser.Scene má vlastní `data` (DataManager).
   private gameOverData!: GameOverData;
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private escKey!: Phaser.Input.Keyboard.Key;
@@ -34,323 +52,145 @@ export class GameOverScene extends Phaser.Scene {
     this.gameOverData = data;
   }
 
-  create(): void {
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    let y = 30;
+  preload() {
+    this.load.spritesheet("bd", "resources/spritesheet_A.png", { frameWidth: 16, frameHeight: 16 });
+    preloadAtariFonts(this);
+  }
 
-    // Result header
-    if (this.gameOverData.result === "victory") {
-      this.createVictoryScreen(width, y);
-    } else if (this.gameOverData.result === "death") {
-      this.createDeathScreen(width, y);
-    } else {
-      this.createQuitScreen(width, y);
+  create(): void {
+    registerAtariFonts(this);
+    if (!this.anims.exists("diamond_anim")) {
+      this.anims.create({
+        key: "diamond_anim",
+        frames: this.anims.generateFrameNumbers("bd", { start: 40, end: 47 }),
+        frameRate: 12,
+        repeat: -1,
+      });
     }
 
-    // Setup keys
-    this.spaceKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE
-    );
-    this.escKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.ESC
-    );
+    const d = this.gameOverData;
+    const cave = `CAVE ${d.caveNumber}: ${d.caveName.toUpperCase()}`;
 
+    if (d.result === "victory") {
+      const nextCave = d.caveNumber < 20 ? d.caveNumber + 1 : 1;
+      this.build({
+        header: "VICTORY",
+        headerColor: COL.victory,
+        cave,
+        lines: [
+          { text: `TIME ${d.timeSpent}/${d.timeLimit}S`, color: COL.info },
+          { text: `TIME BONUS +${d.timeBonus}`, color: COL.ok },
+          { text: `DIAMONDS ${d.diamondsCollected}/${d.diamondsNeeded}`, color: COL.info },
+        ],
+        finalScore: d.finalScore,
+        primary: `SPACE - NEXT CAVE (${nextCave})`,
+      });
+    } else if (d.result === "death") {
+      const more = Math.max(0, d.diamondsNeeded - d.diamondsCollected);
+      this.build({
+        header: "GAME OVER",
+        headerColor: COL.death,
+        cave,
+        lines: [
+          { text: (d.deathReason ?? "CRUSHED").toUpperCase(), color: COL.bad },
+          { text: `DIAMONDS ${d.diamondsCollected}/${d.diamondsNeeded}  (NEED ${more} MORE)`, color: COL.info },
+          { text: `TIME PLAYED ${d.timeSpent}S`, color: COL.info },
+          { text: `SCORE ${d.score}`, color: COL.info },
+        ],
+        primary: "SPACE - RETRY",
+      });
+    } else {
+      this.build({
+        header: "QUIT",
+        headerColor: COL.quit,
+        cave,
+        lines: [
+          { text: `DIAMONDS ${d.diamondsCollected}/${d.diamondsNeeded}`, color: COL.info },
+          { text: `TIME PLAYED ${d.timeSpent}S`, color: COL.info },
+          { text: `SCORE ${d.score}`, color: COL.info },
+        ],
+        primary: "SPACE - RETRY",
+      });
+    }
+
+    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.spaceKey.on("down", () => this.onRetryOrNext());
     this.escKey.on("down", () => this.onBackToMenu());
   }
 
-  private createVictoryScreen(width: number, startY: number): void {
-    let y = startY;
+  /** Vykreslí celou obrazovku z dat (sjednoceno pro victory/death/quit). */
+  private build(opts: {
+    header: string;
+    headerColor: number;
+    cave: string;
+    lines: Line[];
+    finalScore?: number;
+    primary: string;
+  }): void {
+    const cx = this.cameras.main.width / 2;
+    let y = 18;
 
-    // Title
-    this.add
-      .text(width / 2, y, "🏆 VICTORY! 🏆", {
-        fontFamily: "Atari",
-        fontSize: "24px",
-        color: "#ffff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
+    // Nadpis s černým obrysem (jako title card).
+    this.outlinedHeader(cx, y, opts.header, 24, opts.headerColor);
+    // Rotující diamanty po stranách nadpisu (jako Rockfordi v menu).
+    for (const dx of [-132, 132]) {
+      this.add.sprite(cx + dx, y + 12, "bd", 40).setScale(1.25).play("diamond_anim");
+    }
+    y += 46;
 
-    // Cave info
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
-        {
-          fontFamily: "Atari",
-          fontSize: "14px",
-          color: "#ffffff",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 30;
+    this.bmp(cx, y, opts.cave, 16, COL.name);
+    y += 28;
 
-    // Stats
-    this.add
-      .text(width / 2, y, `Time: ${this.gameOverData.timeSpent}s / ${this.gameOverData.timeLimit}s`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    this.add
-      .text(width / 2, y, `Time bonus: +${this.gameOverData.timeBonus} pts`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded}`,
-        {
-          fontFamily: "Atari",
-          fontSize: "12px",
-          color: "#cccccc",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    this.add
-      .text(width / 2, y, `Base score: ${this.gameOverData.score}`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 25;
-
-    this.add
-      .text(width / 2, y, `Final score: ${this.gameOverData.finalScore}`, {
-        fontFamily: "Atari",
-        fontSize: "16px",
-        color: "#ffff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
-
-    // Actions
-    const nextCave = this.gameOverData.caveNumber < 20 ? this.gameOverData.caveNumber + 1 : 1;
-    this.add
-      .text(width / 2, y, `[SPACE] Next cave (${nextCave})`, {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 20;
-
-    this.add
-      .text(width / 2, y, "[ESC] Return to menu", {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-  }
-
-  private createDeathScreen(width: number, startY: number): void {
-    let y = startY;
-
-    // Title
-    this.add
-      .text(width / 2, y, "💀 FAILED 💀", {
-        fontFamily: "Atari",
-        fontSize: "24px",
-        color: "#ff0000",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
-
-    // Death reason
-    if (this.gameOverData.deathReason) {
-      this.add
-        .text(width / 2, y, this.gameOverData.deathReason, {
-          fontFamily: "Atari",
-          fontSize: "14px",
-          color: "#ff6666",
-        })
-        .setOrigin(0.5, 0);
-      y += 28;
+    for (const ln of opts.lines) {
+      this.bmp(cx, y, ln.text, 8, ln.color);
+      y += 15;
     }
 
-    // Cave info
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
-        {
-          fontFamily: "Atari",
-          fontSize: "14px",
-          color: "#ffffff",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 30;
-
-    // Stats
-    this.add
-      .text(width / 2, y, `Time played: ${this.gameOverData.timeSpent}s`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    const remaining = this.gameOverData.diamondsNeeded - this.gameOverData.diamondsCollected;
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded} (needed ${remaining} more)`,
-        {
-          fontFamily: "Atari",
-          fontSize: "12px",
-          color: "#ff8888",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    this.add
-      .text(width / 2, y, `Score: ${this.gameOverData.score}`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
-
-    // Actions
-    this.add
-      .text(width / 2, y, "[SPACE] Retry", {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 20;
-
-    this.add
-      .text(width / 2, y, "[ESC] Return to menu", {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-  }
-
-  private createQuitScreen(width: number, startY: number): void {
-    let y = startY;
-
-    // Title
-    this.add
-      .text(width / 2, y, "LEVEL QUIT", {
-        fontFamily: "Atari",
-        fontSize: "24px",
-        color: "#ffaa00",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
-
-    // Quit reason
-    if (this.gameOverData.deathReason) {
-      this.add
-        .text(width / 2, y, this.gameOverData.deathReason, {
-          fontFamily: "Atari",
-          fontSize: "14px",
-          color: "#ffcc66",
-        })
-        .setOrigin(0.5, 0);
-      y += 28;
+    if (opts.finalScore !== undefined) {
+      y += 8;
+      const st = this.bmp(cx, y, "SCORE 0", 16, COL.score);
+      const counter = { v: 0 };
+      const target = opts.finalScore;
+      this.tweens.add({
+        targets: counter,
+        v: target,
+        duration: 800,
+        ease: "Cubic.easeOut",
+        onUpdate: () => st.setText(`SCORE ${Math.floor(counter.v)}`),
+        onComplete: () => st.setText(`SCORE ${target}`),
+      });
+      y += 26;
     }
 
-    // Cave info
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Cave ${this.gameOverData.caveNumber}: "${this.gameOverData.caveName}"`,
-        {
-          fontFamily: "Atari",
-          fontSize: "14px",
-          color: "#ffffff",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 30;
+    y += 12;
+    // Primární výzva bliká (alfa), ESC do menu staticky.
+    const prompt = this.bmp(cx, y, opts.primary, 16, COL.ok);
+    this.tweens.add({ targets: prompt, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
+    y += 24;
+    this.bmp(cx, y, "ESC - MENU", 16, COL.ok);
+  }
 
-    // Stats
-    this.add
-      .text(width / 2, y, `Time played: ${this.gameOverData.timeSpent}s`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 18;
+  /** Bitmap text vycentrovaný na x, originX 0.5. */
+  private bmp(cx: number, y: number, text: string, size: number, tint: number): Phaser.GameObjects.BitmapText {
+    return this.add.bitmapText(cx, y, FONT, text, size).setOrigin(0.5, 0).setTint(tint);
+  }
 
-    this.add
-      .text(
-        width / 2,
-        y,
-        `Diamonds: ${this.gameOverData.diamondsCollected}/${this.gameOverData.diamondsNeeded}`,
-        {
-          fontFamily: "Atari",
-          fontSize: "12px",
-          color: "#cccccc",
-        }
-      )
-      .setOrigin(0.5, 0);
-    y += 18;
-
-    this.add
-      .text(width / 2, y, `Score: ${this.gameOverData.score}`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    y += 35;
-
-    // Actions
-    this.add
-      .text(width / 2, y, "[SPACE] Retry", {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
-    y += 20;
-
-    this.add
-      .text(width / 2, y, "[ESC] Return to menu", {
-        fontFamily: "Atari",
-        fontSize: "13px",
-        color: "#00ff00",
-      })
-      .setOrigin(0.5, 0);
+  /** Nadpis s 8-směrným černým obrysem (bílé/barevné písmo navrch). */
+  private outlinedHeader(cx: number, y: number, text: string, size: number, fill: number): void {
+    const O = 2;
+    const offs = [[-O, -O], [0, -O], [O, -O], [-O, 0], [O, 0], [-O, O], [0, O], [O, O]];
+    for (const [ox, oy] of offs) {
+      this.add.bitmapText(cx + ox!, y + oy!, FONT, text, size).setOrigin(0.5, 0).setTint(0x000000);
+    }
+    this.add.bitmapText(cx, y, FONT, text, size).setOrigin(0.5, 0).setTint(fill);
   }
 
   private onRetryOrNext(): void {
     if (this.gameOverData.result === "victory") {
-      // Go to next cave
       const nextCave = this.gameOverData.caveNumber < 20 ? this.gameOverData.caveNumber + 1 : 1;
       this.scene.start("GameScene", { caveNumber: nextCave });
     } else {
-      // Retry same cave
       this.scene.start("GameScene", { caveNumber: this.gameOverData.caveNumber });
     }
   }

@@ -26,22 +26,12 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [WelcomeScene, GameScene, GameOverScene],
 };
 
-// Wait for Atari font to load, then load caves and start game
+// Načti jeskyně a spusť hru. (Atari font je bitmapový, renderuje se na plátno –
+// žádné čekání na webový font není potřeba.)
 async function initGame() {
   try {
-    // Wait for font to be ready
-    await document.fonts.ready;
-    console.log("Atari font loaded successfully");
-    
-    // Load font explicitly if not loaded
-    await document.fonts.load('11px Atari');
-    console.log("Atari font 11px loaded");
-    
-    // Load caves
     await CaveLoader.loadAll();
     console.log("Caves loaded, starting game...");
-    
-    // Start Phaser
     new Phaser.Game(config);
   } catch (error) {
     console.error("Failed to initialize game:", error);

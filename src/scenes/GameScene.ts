@@ -1578,66 +1578,17 @@ const belowBoulder = addV(target, DIR.DOWN);
     this.pauseOverlay.add(bg);
     this.pauseOverlay.add(border);
 
-    let currentY = 20;
-
-    const title = this.add
-      .text(width / 2, currentY, "⏸ PAUSED ⏸", {
-        fontFamily: "Atari",
-        fontSize: "20px",
-        color: "#ffff00",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(title);
-    currentY += 40;
-
-    const resume = this.add
-      .text(width / 2, currentY, "Press P to resume", {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(resume);
-    currentY += 30;
-
-    const timeText = this.add
-      .text(width / 2, currentY, `Time: ${Math.floor(this.timeRemaining)}s / ${this.timeLimit}s`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(timeText);
-    currentY += 20;
-
-    const diamondText = this.add
-      .text(width / 2, currentY, `Diamonds: ${this.diamondsCollected}/${this.diamondsNeeded}`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(diamondText);
-    currentY += 20;
-
-    const scoreText = this.add
-      .text(width / 2, currentY, `Score: ${this.score}`, {
-        fontFamily: "Atari",
-        fontSize: "12px",
-        color: "#cccccc",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(scoreText);
-    currentY += 35;
-
-    const actions = this.add
-      .text(width / 2, currentY, "R - Restart   ESC - Quit", {
-        fontFamily: "Atari",
-        fontSize: "11px",
-        color: "#888888",
-      })
-      .setOrigin(0.5, 0);
-    this.pauseOverlay.add(actions);
+    const cx = width / 2;
+    const txt = (yy: number, text: string, size: number, tint: number) => {
+      const t = this.add.bitmapText(cx, yy, FONT, text, size).setOrigin(0.5, 0).setTint(tint);
+      this.pauseOverlay!.add(t);
+    };
+    txt(18, "PAUSED", 16, HUD.score);
+    txt(48, "PRESS P TO RESUME", 8, HUD.white);
+    txt(78, `TIME ${Math.floor(this.timeRemaining)}S / ${this.timeLimit}S`, 8, 0xd9c9a3);
+    txt(96, `DIAMONDS ${this.diamondsCollected}/${this.diamondsNeeded}`, 8, 0xd9c9a3);
+    txt(114, `SCORE ${this.score}`, 8, 0xd9c9a3);
+    txt(150, "R - RESTART    ESC - QUIT", 8, 0x9a8a66);
   }
 
   private destroyPauseOverlay(): void {
@@ -1658,7 +1609,7 @@ const belowBoulder = addV(target, DIR.DOWN);
     const timeSpent = Math.floor(this.gameTime);
 
     this.activeDialog = new ConfirmDialog(this, {
-      title: "⚠️ RESTART LEVEL?",
+      title: "RESTART LEVEL?",
       message: "You will lose all progress!",
       details: [
         `Time played: ${timeSpent}s`,
@@ -1690,7 +1641,7 @@ const belowBoulder = addV(target, DIR.DOWN);
     const timeSpent = Math.floor(this.gameTime);
 
     this.activeDialog = new ConfirmDialog(this, {
-      title: "⚠️ QUIT LEVEL?",
+      title: "QUIT LEVEL?",
       message: "You will lose all progress!",
       details: [
         `Time played: ${timeSpent}s`,

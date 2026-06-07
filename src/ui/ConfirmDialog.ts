@@ -1,4 +1,7 @@
 import Phaser from "phaser";
+import { DEFAULT_FONT } from "./AtariFont";
+
+const FONT = DEFAULT_FONT;
 
 export interface DialogConfig {
   title: string;
@@ -30,114 +33,56 @@ export class ConfirmDialog {
 
   private createDialog(): void {
     const width = 400;
-    const height = 280;
+    const height = 240;
     const x = this.scene.cameras.main.width / 2 - width / 2;
     const y = this.scene.cameras.main.height / 2 - height / 2;
 
-    this.container = this.scene.add.container(x, y).setDepth(10000);
-    this.container.setScrollFactor(0);
+    this.container = this.scene.add.container(x, y).setDepth(10000).setScrollFactor(0);
 
-    // Background (semi-transparent black)
-    const bg = this.scene.add
-      .rectangle(0, 0, width, height, 0x000000, 0.9)
-      .setOrigin(0, 0);
-    this.container.add(bg);
-
-    // Border
+    const bg = this.scene.add.rectangle(0, 0, width, height, 0x000000, 0.9).setOrigin(0, 0);
     const border = this.scene.add
       .rectangle(0, 0, width, height, 0xffffff, 0)
       .setStrokeStyle(2, 0xffffff)
       .setOrigin(0, 0);
+    this.container.add(bg);
     this.container.add(border);
 
-    let currentY = 20;
+    const cx = width / 2;
+    // Bitmap font je jen velkými písmeny → text vždy zvelkopísmeníme.
+    const txt = (yy: number, text: string, size: number, tint: number) => {
+      const t = this.scene.add
+        .bitmapText(cx, yy, FONT, text.toUpperCase(), size)
+        .setOrigin(0.5, 0)
+        .setTint(tint);
+      this.container.add(t);
+      return t;
+    };
 
-    // Title
-    const title = this.scene.add
-      .text(width / 2, currentY, this.config.title, {
-        fontFamily: "Atari",
-        fontSize: "18px",
-        color: "#ffff00",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    this.container.add(title);
-    currentY += 40;
+    let cyy = 22;
+    txt(cyy, this.config.title, 16, 0xffd23f);
+    cyy += 34;
+    txt(cyy, this.config.message, 8, 0xffffff);
+    cyy += 28;
 
-    // Message
-    const message = this.scene.add
-      .text(width / 2, currentY, this.config.message, {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#ffffff",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    this.container.add(message);
-    currentY += 40;
-
-    // Details (if any)
     if (this.config.details && this.config.details.length > 0) {
-      currentY += 10;
-
-      const detailsTitle = this.scene.add
-        .text(width / 2, currentY, "Current progress:", {
-          fontFamily: "Atari",
-          fontSize: "12px",
-          color: "#aaaaaa",
-          align: "center",
-        })
-        .setOrigin(0.5, 0);
-      this.container.add(detailsTitle);
-      currentY += 20;
-
-      this.config.details.forEach((detail) => {
-        const detailText = this.scene.add
-          .text(width / 2, currentY, detail, {
-            fontFamily: "Atari",
-            fontSize: "12px",
-            color: "#cccccc",
-            align: "center",
-          })
-          .setOrigin(0.5, 0);
-        this.container.add(detailText);
-        currentY += 18;
-      });
-
-      currentY += 10;
+      txt(cyy, "CURRENT PROGRESS:", 8, 0x9a8a66);
+      cyy += 18;
+      for (const detail of this.config.details) {
+        txt(cyy, detail, 8, 0xd9c9a3);
+        cyy += 16;
+      }
+      cyy += 10;
     }
 
-    // Separator line
     const separator = this.scene.add
-      .rectangle(40, currentY, width - 80, 1, 0x666666)
+      .rectangle(40, cyy, width - 80, 1, 0x6b5a33)
       .setOrigin(0, 0);
     this.container.add(separator);
-    currentY += 20;
+    cyy += 16;
 
-    // Confirm text
-    const confirmText = this.config.confirmText || "Press Y to confirm";
-    const confirm = this.scene.add
-      .text(width / 2, currentY, confirmText, {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#00ff00",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    this.container.add(confirm);
-    currentY += 25;
-
-    // Cancel text
-    const cancelText = this.config.cancelText || "Press N to cancel";
-    const cancel = this.scene.add
-      .text(width / 2, currentY, cancelText, {
-        fontFamily: "Atari",
-        fontSize: "14px",
-        color: "#ff0000",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    this.container.add(cancel);
+    txt(cyy, this.config.confirmText || "Press Y to confirm", 16, 0x6cc04a);
+    cyy += 26;
+    txt(cyy, this.config.cancelText || "Press N to cancel", 16, 0xff4030);
   }
 
   private setupKeys(): void {
