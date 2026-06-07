@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Zigzag
+diamonds: 26
+time: 210
+speed: 0.15
+scheme: olive
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 T*. ...**.....*.*..*........*.....*..+.T
 T.....+.*....... ....*....*..*..... ..*T
 T.......*+-.*.-.. -...-*...*... O.. .. T

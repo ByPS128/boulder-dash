@@ -433,14 +433,22 @@ viz `README.md`):
   předloha (DLI raster bars) je v `atari.md`.
 - **Deterministický PRNG** (`src/core/Rng.ts`): věrný překlad rutiny `PseudoRandom`
   (viz výše); používá se pro `canPush` a růst amoeby, seedovaný per jeskyně.
-- **Spritesheet framy** (`spritesheet_A.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
+- **Spritesheet framy** (`sprites_source.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
   noha vždy končí na zemi); framy 4/9 jsou PRÁZDNÉ (nepoužívat); magic wall 50–53,
   amoeba 60–63, firefly 80, butterfly 90, explosion 100.
+- **Barevná schémata jeskyní** (`src/core/SpritePalette.ts` + `levels/schemes.txt`):
+  `sprites_source.png` je ŠABLONA (6-barevný indexovaný list = „sloty" base/shadow/hi/
+  accent/ink, index 0 průhledný). Schéma nastaví barvy slotů GLOBÁLNĚ i PER ENTITA
+  (`diamond.base #...`). Za běhu se ze šablony vyrobí obarvená RGBA textura "bd"
+  (frame→entita podle `ENTITY_FRAMES`), cache per schéma. Sprity/anim dál používají "bd".
+  Pozn.: některé framy jsou sdílené (titan = zavřený exit, born = exploze) → sdílí barvy.
+- **Definice jeskyně** (`CaveLoader.ts`): `.txt` = hlavička `klíč: hodnota`
+  (name/diamonds/time/speed/scheme) + `---` + mapa 40×22. `speed` = délka herního ticku.
 - **In-game HUD** (`GameScene.createUI`/`updateUI`): bitmap font, vlevo ikona diamantu
   + sebráno/potřeba (zezelená po splnění), uprostřed čas (barevně), vpravo skóre
   (6 míst, origin vpravo → neskáče). Název jeskyně = **title card** přes plochu
   (`showTitleCard`): bílé písmo + černý 8-směrný obrys, fade in/hold/out (tween `hold`+`yoyo`).
-- **Ladící TEST scény** na začátku menu: pole `TEST_CAVES` v `CaveLoader.ts`.
+- **Ladící TEST scény** na začátku menu: čísla 101+ v `CaveLoader.ts` (`TEST_FILES`).
 
 ---
 

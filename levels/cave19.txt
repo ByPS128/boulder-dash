@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Intermission 3
+diamonds: 50
+time: 320
+speed: 0.15
+scheme: purple
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 TS..*..........*........*.....*..*.....T
 T.*.**.........*...*........*......*.*.E
 T.*..*........*..*....*.*..........*.**T

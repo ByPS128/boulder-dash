@@ -14,6 +14,8 @@ export interface CaveDefinition {
   diamondValue: number; // Points per diamond (10)
   diamondBonusValue: number; // Points per diamond after exit opens (15)
   timeBonus: number; // Bonus points per remaining second (5)
+  speed: number; // délka herního ticku v s (jak rychle běží simulace), default 0.15
+  scheme: string; // ID barevného schématu (viz levels/schemes.txt)
 }
 
 /**

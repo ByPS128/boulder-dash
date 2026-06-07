@@ -1,5 +1,8 @@
 import Phaser from "phaser";
 import { AttemptResult } from "../core/SessionStats";
+import { CaveLoader } from "../levels/CaveLoader";
+import { SchemeLoader } from "../levels/SchemeLoader";
+import { preloadSprites, applyCaveScheme } from "../core/SpritePalette";
 import { preloadAtariFonts, registerAtariFonts, DEFAULT_FONT } from "../ui/AtariFont";
 
 const FONT = DEFAULT_FONT;
@@ -53,12 +56,15 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.spritesheet("bd", "resources/spritesheet_A.png", { frameWidth: 16, frameHeight: 16 });
+    preloadSprites(this);
     preloadAtariFonts(this);
   }
 
   create(): void {
     registerAtariFonts(this);
+    // Diamanty obarvíme schématem dohrané jeskyně (fallback classic).
+    const scheme = CaveLoader.getCave(this.gameOverData.caveNumber)?.scheme;
+    applyCaveScheme(this, SchemeLoader.get(scheme ?? "classic"));
     if (!this.anims.exists("diamond_anim")) {
       this.anims.create({
         key: "diamond_anim",

@@ -1,0 +1,36 @@
+# Barevná schémata jeskyní (palette-swap přes sloty).
+# Sloty: base, shadow, hi, accent, ink.
+# Globálně:        base   #RRGGBB
+# Přepis entity:   diamond.base #RRGGBB
+# Entity: rockford, dirt, wall, titan, boulder, diamond, magicwall, amoeba,
+#         firefly, butterfly, spawn, explosion.
+# Pozn.: shadow/hi/ink obvykle necháváme z grafiky (stín/bílá/černá) – stačí
+# nastavit base + accent. Sloty bez hodnoty zůstanou jako ve zdroji.
+
+# --- 4 původní varianty (z dřívějších spritesheet_A/B/C/D) ---
+
+[classic]
+base   #646464
+accent #A36E30
+
+[purple]
+base   #9D54C4
+accent #D2887E
+
+[olive]
+base   #A36E30
+accent #6B5500
+
+[mauve]
+base   #A36E30
+accent #A0617A
+
+# --- ukázka per-entity ladění (ponecháno jako vzor, klidně uprav) ---
+
+[ocean]
+base   #2E5C8A
+accent #6CC0FF
+diamond.base   #BFE9FF
+diamond.accent #2080FF
+amoeba.base    #2FB36B
+amoeba.hi      #BFFFD9

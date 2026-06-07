@@ -53,14 +53,16 @@ Otevři URL, kterou Vite vypíše. Atarijský font se načte před startem Phase
 ```
 index.html                  připojí #app a spustí src/main.ts (žádný webový font – font je bitmapový)
 src/
-  main.ts                   čeká na fonty → CaveLoader.loadAll() → new Phaser.Game
+  main.ts                   CaveLoader.loadAll() + SchemeLoader.loadAll() → new Phaser.Game
   core/
     types.ts                Vec2/DIR helpery, CellKind, union CellEntity, config obtížnosti
-    CaveDefinition.ts       Rozhraní metadat jeskyně + úpravy podle obtížnosti
+    CaveDefinition.ts       Rozhraní metadat jeskyně (vč. speed, scheme) + úpravy obtížnosti
     SessionStats.ts         Pokusy per jeskyně, best score; persistováno do localStorage
     Rng.ts                  Deterministický PRNG (věrný překlad 6502 PseudoRandom)
+    SpritePalette.ts        Per-entity recolor: ze sprites_source vyrobí obarvenou texturu "bd"
   levels/
-    CaveLoader.ts           Fetchne levels/caveNN.txt, validuje, přidá UI řádek; TEST_CAVES
+    CaveLoader.ts           Fetchne+parsuje levels/*.txt (hlavička + mapa)
+    SchemeLoader.ts         Načte+parsuje levels/schemes.txt → barevná schémata
   scenes/
     WelcomeScene.ts         Úvod: bitmap font, carry intro (2 Rockfordi), rolovací duha, výběr jeskyně
     GameScene.ts            Jádro herní smyčky a simulace (viz níže)
@@ -68,10 +70,11 @@ src/
   ui/
     AtariFont.ts            Načtení Atari charsetu + runtime maskování → Phaser RetroFont
     ConfirmDialog.ts        Znovupoužitelný potvrzovací dialog Y/N
-levels/cave01..20.txt       ASCII mapy jeskyní (40×22)
+levels/cave01..20.txt       Definice jeskyní: hlavička (metadata) + mapa 40×22
 levels/test_*.txt           Ladící TEST scény (amoeba, magic wall)
-resources/                  spritesheet_A.png, balík atarijských fontů (EightBit-Atari-Fonts-2),
-                            atari-dev-a-*.png/gif (předlohy rolovací duhy)
+levels/schemes.txt          Barevná schémata jeskyní (palette-swap)
+resources/                  sprites_source.png (šablona spritů), balík atarijských fontů
+                            (EightBit-Atari-Fonts-2), atari-dev-a-*.png/gif (předlohy duhy)
 atari.md                    Poznámky k Atari grafickému kernelu / DLI raster bars (předloha duhy)
 CLAUDE.md                   Master pravidla & reference (číst první)
 *.asm / *.mhtml             C64 Boulder Dash disassembly (reference)
@@ -147,7 +150,18 @@ index.html ─ font ─▶ main.ts ─▶ CaveLoader.loadAll() ─▶ new Phaser
 
 ## Formát souboru jeskyně
 
-Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
+Každý `levels/caveNN.txt` má **hlavičku** (`klíč: hodnota`), oddělovač `---` a pod ním
+**mapu 40 × 22** ASCII:
+
+```
+name: Intro
+diamonds: 12
+time: 150
+speed: 0.15          # délka herního ticku v s (menší = rychlejší)
+scheme: classic      # ID barevného schématu (levels/schemes.txt)
+---
+====================================== (22 řádků mapy)
+```
 
 | Znak | Dlaždice        | Znak | Dlaždice           |
 |------|-----------------|------|--------------------|
@@ -157,6 +171,35 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
 | ` `  | Prázdný prostor | `X`  | Butterfly          |
 | `*`  | Balvan          | `P`  | Magic wall         |
 | `+`  | Diamant         | `A`  | Amoeba             |
+
+## Barevná schémata jeskyní (palette-swap)
+
+Sprity nemají barvy zapečené – existuje **jedna šablona** `resources/sprites_source.png`
+(6-barevný indexovaný list) a barvy se nastavují **per jeskyně** podle schématu.
+
+- **Sloty** (sémantické názvy zdrojových indexů): `base`, `shadow`, `hi`, `accent`,
+  `ink` (+ index 0 = vždy průhledný). Stačí obvykle nastavit `base` + `accent`,
+  zbytek (stín/bílá) se vezme ze šablony.
+- **Schéma** (`levels/schemes.txt`) má **globální** barvy slotů a volitelné
+  **per-entity přepisy** (`diamond.base #BFE9FF`) – takže stejný slot může být u
+  diamantu jiný než u hlíny. Entity: `rockford, dirt, wall, titan, boulder, diamond,
+  magicwall, amoeba, firefly, butterfly, spawn, explosion`.
+- **Runtime** (`src/core/SpritePalette.ts`): při změně jeskyně se ze šablony vyrobí
+  obarvená RGBA textura "bd" (frame po framu podle entit), výsledek se **cachuje per
+  schéma**. Všechny sprity i animace dál používají klíč "bd".
+
+Příklad:
+```
+[classic]
+base   #646464
+accent #A36E30
+
+[ocean]
+base   #2E5C8A
+accent #6CC0FF
+diamond.base   #BFE9FF   # diamanty modré
+amoeba.base    #2FB36B   # amoeba zelená (zbytek scény zůstane modrý)
+```
 
 ## Aktuální stav
 
@@ -181,6 +224,8 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
 - **Úvodní obrazovka**: ostrý Atari bitmap font (RetroFont), carry intro (2 Rockfordi
   nanosí titulek, sokoban-tlačení), rolovací duha z předlohy; přerušitelné klávesou
   (viz sekce *Úvodní obrazovka* výše).
+- **Barevná schémata jeskyní** (palette-swap): jedna šablona spritů + per-cave/per-entity
+  obarvení za běhu (viz sekce výše); metadata jeskyně (vč. `speed`, `scheme`) v hlavičce `.txt`.
 - **In-game HUD** na bitmap fontu: vlevo animovaná ikona diamantu + sebráno/potřeba
   (zezelená po splnění), uprostřed čas (barevně), vpravo skóre (6 míst, zarovnané);
   tmavý pruh pro čitelnost. Název jeskyně se ukáže jako **title card** přes plochu

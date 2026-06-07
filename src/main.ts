@@ -3,6 +3,7 @@ import { WelcomeScene } from "./scenes/WelcomeScene";
 import { GameScene } from "./scenes/GameScene";
 import { GameOverScene } from "./scenes/GameOverScene";
 import { CaveLoader } from "./levels/CaveLoader";
+import { SchemeLoader } from "./levels/SchemeLoader";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -30,8 +31,8 @@ const config: Phaser.Types.Core.GameConfig = {
 // žádné čekání na webový font není potřeba.)
 async function initGame() {
   try {
-    await CaveLoader.loadAll();
-    console.log("Caves loaded, starting game...");
+    await Promise.all([CaveLoader.loadAll(), SchemeLoader.loadAll()]);
+    console.log("Caves + schemes loaded, starting game...");
     new Phaser.Game(config);
   } catch (error) {
     console.error("Failed to initialize game:", error);

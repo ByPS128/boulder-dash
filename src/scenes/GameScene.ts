@@ -24,6 +24,8 @@ import { sessionStats } from "../core/SessionStats";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { GameOverData } from "./GameOverScene";
 import { preloadAtariFonts, registerAtariFonts, DEFAULT_FONT } from "../ui/AtariFont";
+import { SchemeLoader } from "../levels/SchemeLoader";
+import { preloadSprites, applyCaveScheme } from "../core/SpritePalette";
 
 // Game states
 enum GameState {
@@ -59,7 +61,7 @@ const HUD = {
 // Fixed-step tick (matches Kaboom version feel)
 const SPEED = 0.15;
 
-// Spritesheet frames (spritesheet_A.png)
+// Framy spritů (sprites_source.png, recolor viz SpritePalette)
 const FRAMES = {
   TITAN: 30,
   SPAWN: 31,
@@ -174,6 +176,7 @@ export class GameScene extends Phaser.Scene {
   private timeRemaining = 0;
 
   private stepAcc = 0;
+  private speed = SPEED; // délka herního ticku (s) – přepíše se z cave.speed
   private tickCount = 0;
   // Herní čas v sekundách – narůstá jen když hra běží (ne během pauzy/dialogů).
   // Používá se místo Date.now(), aby pauza nezkreslovala časování animací ani statistiky.
@@ -220,10 +223,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.spritesheet("bd", "resources/spritesheet_A.png", {
-      frameWidth: TILE,
-      frameHeight: TILE,
-    });
+    preloadSprites(this);
     preloadAtariFonts(this);
   }
 
@@ -241,6 +241,7 @@ export class GameScene extends Phaser.Scene {
     this.diamondsNeeded = cave.diamondsNeeded;
     this.timeLimit = cave.timeLimit;
     this.timeRemaining = cave.timeLimit;
+    this.speed = cave.speed; // rychlost simulace per jeskyně
     // PRNG seedujeme číslem jeskyně → stejná jeskyně má reprodukovatelný průběh náhod.
     this.rng = new Rng(this.caveNumber);
 
@@ -256,6 +257,9 @@ export class GameScene extends Phaser.Scene {
     this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
+    // Přebarvit sprity podle schématu jeskyně (musí být PŘED createAnims – ty
+    // vážou framy na texturu "bd").
+    applyCaveScheme(this, SchemeLoader.get(cave.scheme));
     this.createAnims();
     this.buildLevelFromMap(cave.map);
 
@@ -302,9 +306,9 @@ export class GameScene extends Phaser.Scene {
     this.stepAcc += delta;
     this.updateCamera(delta);
 
-    if (this.stepAcc >= SPEED) {
-      while (this.stepAcc >= SPEED) {
-        this.stepAcc -= SPEED;
+    if (this.stepAcc >= this.speed) {
+      while (this.stepAcc >= this.speed) {
+        this.stepAcc -= this.speed;
         this.step();
       }
     }

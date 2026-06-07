@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Greed
+diamonds: 28
+time: 210
+speed: 0.15
+scheme: classic
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 T . *.. . .. ..*. ..S ..*.  ..*. *... .T
 T.*.**...... ..*...*.... ...*.....+*.*.T
 E *..*...  ...*..*. ..*.*...-----------T

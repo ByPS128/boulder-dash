@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { CaveLoader } from "../levels/CaveLoader";
+import { SchemeLoader } from "../levels/SchemeLoader";
 import { sessionStats } from "../core/SessionStats";
+import { preloadSprites, applyCaveScheme } from "../core/SpritePalette";
 import {
   preloadAtariFonts,
   registerAtariFonts,
@@ -141,12 +143,14 @@ export class WelcomeScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.spritesheet("bd", "resources/spritesheet_A.png", { frameWidth: 16, frameHeight: 16 });
+    preloadSprites(this);
     preloadAtariFonts(this);
   }
 
   create(): void {
     registerAtariFonts(this);
+    // Menu/intro používá výchozí schéma "classic".
+    applyCaveScheme(this, SchemeLoader.get("classic"));
     this.createAnims();
     this.ensureRainbowTexture();
     this.left = this.cameras.main.width / 2 - (TITLE.length * CELL) / 2;

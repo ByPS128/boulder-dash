@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Intermission 2
+diamonds: 45
+time: 300
+speed: 0.15
+scheme: olive
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 T*.**..  *..*..*.*..S*..*.**..*.**...*.T
 T.-.**......*..*...*....-...*......*.*.T
 T**-.*... *.. *..*.*..*-*.... .. ..*.*OT

@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Fireflies
+diamonds: 22
+time: 190
+speed: 0.15
+scheme: olive
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 TS.....................................T
 T......................................T
 T......................................T

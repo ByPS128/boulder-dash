@@ -1,3 +1,9 @@
+name: TEST: Magic Wall
+diamonds: 1
+time: 999
+speed: 0.15
+scheme: classic
+---
 ========================================
 =   =                                  =
 =   =                                  =

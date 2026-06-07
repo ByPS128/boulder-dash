@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Amoeba
+diamonds: 30
+time: 240
+speed: 0.15
+scheme: purple
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 T---------....*.*..*........*.---------T
 T-        ...........*....*...        -T
 T- +O     ..*..........*...*..     O+ -T

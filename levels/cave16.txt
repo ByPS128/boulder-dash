@@ -1,4 +1,10 @@
-﻿TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+name: Enchanted Fireflies
+diamonds: 32
+time: 240
+speed: 0.15
+scheme: mauve
+---
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
 T*.....**.E.....*.S*A.......*........*.T
 T.....*.*............*....*..*.*.......T
 T........*..*..............*...........T
