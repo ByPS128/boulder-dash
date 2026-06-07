@@ -22,21 +22,49 @@ const PAL = {
 const TITLE = "BOULDER DASH";
 const TITLE_SIZE = 24; // 8px glyf × scale 3
 const TITLE_Y = 14;
-const GLYPH_ADV = (TITLE_SIZE / 8) * 8; // = 24 px na znak (font je pevných 8px)
-const LW = GLYPH_ADV; // šířka písmene
-const LH = TITLE_SIZE; // výška písmene
+const CELL = (TITLE_SIZE / 8) * 8; // mřížka = velikost písmene = 24 px
 
-// Pohyb Rockfordů při nanášení = rychlost hry (1 dlaždice 16 px za 1 tick 150 ms).
-const STEP_PX = 16;
-const STEP_MS = 150;
-
-type Seg = { dx: number; dy: number; dist: number };
-type LetterPlan = {
-  obj: Phaser.GameObjects.BitmapText;
-  startX: number;
-  startY: number;
-  segs: Seg[];
+/**
+ * Konfigurace úvodní animace (nanášení titulku Rockfordy). Drženo pohromadě,
+ * ať se to snadno ladí.
+ * - tickMs: kadence mřížky (1 buňka za tick) → celková rychlost. Hra je ~225 ms
+ *   na 24px buňku; tady je to lehce svižnější.
+ * - stepMin/MaxMs: vizuální délka jednoho kroku (< tickMs → vzniká „stutter",
+ *   takže každý krok netrvá stejně, jako ve hře).
+ * - pushStruggleChance: šance, že tlačení 1 tick „zadrhne" (Rockford postojí).
+ * - spawnRowMin/Max: náhodný řádek pod nápisem, odkud se prostřední písmeno tlačí.
+ * - finishMs: po stisku klávesy se úvod dorazí do ~půl vteřiny.
+ */
+const INTRO_CFG = {
+  tickMs: 130,
+  stepMinMs: 70,
+  stepMaxMs: 122,
+  pushStruggleChance: 0.18,
+  spawnRowMin: 2,
+  spawnRowMax: 4,
+  finishMs: 400,
+  rockfordScale: 1.5,
 };
+
+type Cell = { c: number; r: number };
+type IntroStep =
+  | { t: "move"; to: Cell }
+  | { t: "push"; to: Cell; letter: Phaser.GameObjects.BitmapText; letterTo: Cell; place: boolean };
+
+interface IntroActor {
+  sprite: Phaser.GameObjects.Sprite;
+  cell: Cell;
+  letterCell: Cell | null; // buňka právě tlačeného písmene (kvůli obsazenosti)
+  endCell: Cell; // kde Rockford skončí (vedle B / H)
+  steps: IntroStep[];
+  idx: number;
+  facing: "l" | "r";
+  struggling: boolean; // čeká kvůli zádrhelu tlačení
+  done: boolean;
+}
+
+const cellKey = (c: Cell) => `${c.c},${c.r}`;
+const sameCell = (a: Cell, b: Cell) => a.c === b.c && a.r === b.r;
 
 /** HSV → RGB (h,s,v 0–1). Pro generování duhové textury. */
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
@@ -57,10 +85,21 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
+/** Manhattan dráha mezi buňkami (po jedné buňce). Pořadí os "yx" (svisle pak vodorovně). */
+function walkSteps(from: Cell, to: Cell, order: "xy" | "yx" = "yx"): IntroStep[] {
+  const out: IntroStep[] = [];
+  let { c, r } = from;
+  const goY = () => { while (r !== to.r) { r += Math.sign(to.r - r); out.push({ t: "move", to: { c, r } }); } };
+  const goX = () => { while (c !== to.c) { c += Math.sign(to.c - c); out.push({ t: "move", to: { c, r } }); } };
+  if (order === "yx") { goY(); goX(); } else { goX(); goY(); }
+  return out;
+}
+
 /**
- * Welcome / menu scéna. Text ostrým Atari bitmapovým fontem (RetroFont).
- * Úvod: banda Rockfordů „nanosí" písmena BOULDER DASH (rychlostí hry, sokoban-style
- * tlačení z různých směrů); přerušitelné klávesou. Titulek pak vyplní rolovací duha.
+ * Welcome / menu scéna. Ostrý Atari bitmapový font (RetroFont).
+ * Úvod: dva Rockfordi „nanosí" písmena BOULDER DASH – tlačí je jako balvany po mřížce
+ * (rychlostí hry), prostřední z náhodných spodních řádků zatlačí nahoru, B a H přirazí
+ * na řádku nápisu a zůstanou stát v idle. Přerušitelné klávesou. Titulek pak vyplní duha.
  */
 export class WelcomeScene extends Phaser.Scene {
   private selectedCave = 1;
@@ -75,15 +114,14 @@ export class WelcomeScene extends Phaser.Scene {
   private rightKey!: Phaser.Input.Keyboard.Key;
   private enterKey!: Phaser.Input.Keyboard.Key;
 
-  private rockfordLeftSprite?: Phaser.GameObjects.Sprite;
-  private rockfordRightSprite?: Phaser.GameObjects.Sprite;
-  private idleAnimIndex = 0;
-
   // Úvodní animace
   private introDone = false;
-  private titleLetters: Phaser.GameObjects.BitmapText[] = [];
-  private carriers: Phaser.GameObjects.Sprite[] = [];
+  private left = 0; // x levého okraje nápisu (sloupec 0)
+  private actors: IntroActor[] = [];
+  private introLetters: { obj: Phaser.GameObjects.BitmapText; col: number }[] = [];
+  private placed = new Set<string>(); // buňky s již položenými písmeny (řádek 0)
   private introTweens: Phaser.Tweens.Tween[] = [];
+  private introTimer?: Phaser.Time.TimerEvent;
   private introFade: Phaser.GameObjects.GameObject[] = [];
   private rainbow?: Phaser.GameObjects.TileSprite;
 
@@ -93,18 +131,16 @@ export class WelcomeScene extends Phaser.Scene {
 
   init(data?: { lastCave?: number }): void {
     this.introDone = false;
-    this.titleLetters = [];
-    this.carriers = [];
+    this.actors = [];
+    this.introLetters = [];
+    this.placed = new Set();
     this.introTweens = [];
     this.introFade = [];
     if (data?.lastCave) this.selectedCave = data.lastCave;
   }
 
   preload() {
-    this.load.spritesheet("bd", "resources/spritesheet_A.png", {
-      frameWidth: 16,
-      frameHeight: 16,
-    });
+    this.load.spritesheet("bd", "resources/spritesheet_A.png", { frameWidth: 16, frameHeight: 16 });
     preloadAtariFonts(this);
   }
 
@@ -112,6 +148,7 @@ export class WelcomeScene extends Phaser.Scene {
     registerAtariFonts(this);
     this.createAnims();
     this.ensureRainbowTexture();
+    this.left = this.cameras.main.width / 2 - (TITLE.length * CELL) / 2;
 
     this.buildMenu();
     this.buildTitleIntro();
@@ -132,9 +169,14 @@ export class WelcomeScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    // Rolovací duha v titulku (klidná rychlost ~ 12 px/s).
-    if (this.rainbow) this.rainbow.tilePositionY -= delta * 0.012;
+    if (this.rainbow) this.rainbow.tilePositionY -= delta * 0.012; // rolovací duha
   }
+
+  // ----------------------------------------------------- mřížka → pixely
+  private letterX(col: number): number { return this.left + col * CELL; }
+  private rowY(row: number): number { return TITLE_Y + row * CELL; }
+  private actorX(col: number): number { return this.left + col * CELL + CELL / 2; }
+  private actorY(row: number): number { return TITLE_Y + row * CELL + CELL / 2; }
 
   // ---------------------------------------------------------------- MENU
   private buildMenu(): void {
@@ -167,145 +209,220 @@ export class WelcomeScene extends Phaser.Scene {
   }
 
   // ------------------------------------------------------- ÚVODNÍ ANIMACE
-  /** Vytvoří písmena (různé startovní strany/dráhy) a spustí bandu Rockfordů. */
   private buildTitleIntro(): void {
-    const cx = this.cameras.main.width / 2;
-    const W = this.cameras.main.width;
-    const left = cx - (TITLE.length * GLYPH_ADV) / 2;
+    // Rozdělení: levý staví BOULDE (sloupce 0–5) zleva, pravý RDASH (6,8,9,10,11) zprava.
+    // První (B) a poslední (H) písmeno se dělají nakonec; prostřední v náhodném pořadí.
+    const leftMiddle = Phaser.Utils.Array.Shuffle([1, 2, 3, 4, 5]);
+    const rightMiddle = Phaser.Utils.Array.Shuffle([6, 8, 9, 10]);
 
-    const plans: LetterPlan[] = [];
-    let k = 0;
-    for (let i = 0; i < TITLE.length; i++) {
-      const ch = TITLE[i]!;
-      if (ch === " ") continue;
-      const slotX = left + i * GLYPH_ADV;
-      const leftDist = slotX + LW;
-      const rightDist = W + LW - slotX;
-      const fromLeft = leftDist <= rightDist;
-      const sideDist = Math.min(leftDist, rightDist);
-      let startX: number, startY: number, segs: Seg[];
-      if (sideDist > 180) {
-        // střed titulku → shora dolů (krátká dráha)
-        startX = slotX; startY = -LH - 16;
-        segs = [{ dx: 0, dy: 1, dist: TITLE_Y - startY }];
-      } else {
-        // kraj → z nejbližšího boku; každé druhé jako zalomená dráha (sokoban obíhání)
-        const sokoban = k % 2 === 0;
-        startY = sokoban ? TITLE_Y - 56 : TITLE_Y;
-        if (fromLeft) { startX = -LW; segs = [{ dx: 1, dy: 0, dist: slotX - startX }]; }
-        else { startX = W + LW; segs = [{ dx: -1, dy: 0, dist: startX - slotX }]; }
-        if (sokoban) segs.push({ dx: 0, dy: 1, dist: 56 });
-      }
-      const obj = this.add.bitmapText(startX, startY, FONT, ch, TITLE_SIZE).setOrigin(0, 0).setTint(PAL.title);
-      this.titleLetters.push(obj);
-      plans.push({ obj, startX, startY, segs });
-      k++;
-    }
+    const leftPlan = this.buildActorSteps("L", [...leftMiddle.map((c) => ({ col: c, final: false })), { col: 0, final: true }]);
+    const rightPlan = this.buildActorSteps("R", [...rightMiddle.map((c) => ({ col: c, final: false })), { col: 11, final: true }]);
 
-    // Banda: jeden Rockford na každé písmeno, všichni paralelně (rychlé a „rojové").
-    Promise.all(plans.map((p) => this.carrierWork([p]))).then(() => {
-      if (!this.introDone) this.completeIntro();
-    });
+    this.actors = [this.spawnActor("L", leftPlan), this.spawnActor("R", rightPlan)];
+    this.introTimer = this.time.addEvent({ delay: INTRO_CFG.tickMs, loop: true, callback: () => this.introTick() });
   }
 
-  /** Jeden Rockford z bandy postupně doručí svá písmena. */
-  private async carrierWork(letters: LetterPlan[]): Promise<void> {
-    let carrier: Phaser.GameObjects.Sprite | null = null;
-    for (const L of letters) {
-      if (this.introDone) return;
-      const b0 = this.behindCenter(L.startX, L.startY, L.segs[0]!);
-      if (!carrier) {
-        carrier = this.add.sprite(b0.x, b0.y, "bd", 0).setOrigin(0.5, 0.5).setScale(1.25);
-        carrier.play("run_r");
-        this.carriers.push(carrier);
-      } else {
-        await this.walk(carrier, b0.x, b0.y, "yx");
-      }
-      let lx = L.startX, ly = L.startY;
-      for (const seg of L.segs) {
-        if (this.introDone) return;
-        const b = this.behindCenter(lx, ly, seg);
-        await this.walk(carrier, b.x, b.y, "yx"); // dojít/obejít za písmeno
-        await this.push(carrier, L.obj, seg);     // tlačit na slot
-        lx += seg.dx * seg.dist;
-        ly += seg.dy * seg.dist;
-      }
-    }
-    // Hotovo: Rockford zůstane u posledního písmene; finalizace (completeIntro)
-    // ho odstraní hned, jak doručí poslední písmeno i ostatní z bandy.
-  }
-
-  /** Střed pozice Rockforda „za" písmenem pro tlačení daným směrem. */
-  private behindCenter(lx: number, ly: number, seg: Seg): { x: number; y: number } {
-    if (seg.dx > 0) return { x: lx - 12, y: ly + LH / 2 };
-    if (seg.dx < 0) return { x: lx + LW + 12, y: ly + LH / 2 };
-    return { x: lx + LW / 2, y: ly - 12 }; // tlačení dolů → nad písmenem
-  }
-
-  /** Chůze Rockforda po krocích STEP_PX (rychlost hry); pořadí os "xy"/"yx". */
-  private async walk(c: Phaser.GameObjects.Sprite, toX: number, toY: number, order: "xy" | "yx"): Promise<void> {
-    const axis = async (which: "x" | "y", to: number) => {
-      while (!this.introDone) {
-        const cur = which === "x" ? c.x : c.y;
-        const d = to - cur;
-        if (Math.abs(d) < 0.5) break;
-        const step = Math.sign(d) * Math.min(STEP_PX, Math.abs(d));
-        if (which === "x") c.play(step > 0 ? "run_r" : "run_l", true);
-        await this.tweenP(c, which === "x" ? { x: cur + step } : { y: cur + step });
-      }
+  private spawnActor(side: "L" | "R", plan: { spawn: Cell; end: Cell; steps: IntroStep[] }): IntroActor {
+    const sprite = this.add
+      .sprite(this.actorX(plan.spawn.c), this.actorY(plan.spawn.r), "bd", 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(INTRO_CFG.rockfordScale);
+    sprite.play(side === "L" ? "run_r" : "run_l");
+    return {
+      sprite,
+      cell: { ...plan.spawn },
+      letterCell: null,
+      endCell: plan.end,
+      steps: plan.steps,
+      idx: 0,
+      facing: side === "L" ? "r" : "l",
+      struggling: false,
+      done: false,
     };
-    if (order === "xy") { await axis("x", toX); await axis("y", toY); }
-    else { await axis("y", toY); await axis("x", toX); }
   }
 
-  /** Tlačení písmene (i Rockforda) na slot po krocích STEP_PX. */
-  private async push(c: Phaser.GameObjects.Sprite, letter: Phaser.GameObjects.BitmapText, seg: Seg): Promise<void> {
-    const n = Math.max(1, Math.ceil(seg.dist / STEP_PX));
-    const len = seg.dist / n;
-    for (let s = 0; s < n && !this.introDone; s++) {
-      if (seg.dx !== 0) c.play(seg.dx > 0 ? "run_r" : "run_l", true);
-      await this.tweenP([c, letter], { x: `+=${seg.dx * len}`, y: `+=${seg.dy * len}` });
+  /** Sestaví všechny kroky pro jednoho Rockforda (postupně přes jeho písmena). */
+  private buildActorSteps(
+    side: "L" | "R",
+    tasks: { col: number; final: boolean }[]
+  ): { spawn: Cell; end: Cell; steps: IntroStep[] } {
+    const dir = side === "L" ? 1 : -1;
+    const S = side === "L" ? -5 : 16; // sloupec spawnu písmene (1 buňku za hranou)
+    const steps: IntroStep[] = [];
+    let cur: Cell | null = null;
+    let spawn: Cell = { c: S - dir, r: 0 };
+
+    for (const task of tasks) {
+      const R = task.final ? 0 : Phaser.Math.Between(INTRO_CFG.spawnRowMin, INTRO_CFG.spawnRowMax);
+      // písmeno spawne 1 buňku za hranou; Rockford začne o buňku dál (bod 3)
+      const letter = this.add
+        .bitmapText(this.letterX(S), this.rowY(R), FONT, TITLE[task.col]!, TITLE_SIZE)
+        .setOrigin(0, 0)
+        .setTint(PAL.title);
+      this.introLetters.push({ obj: letter, col: task.col });
+
+      const behind: Cell = { c: S - dir, r: R };
+      if (cur === null) spawn = behind; // první písmeno: Rockford se zde rovnou objeví
+      else steps.push(...walkSteps(cur, behind));
+
+      // přitlačit písmeno vodorovně do cílového sloupce
+      let lc = S, ac = S - dir;
+      while (lc !== task.col) {
+        lc += dir; ac += dir;
+        steps.push({ t: "push", to: { c: ac, r: R }, letter, letterTo: { c: lc, r: R }, place: task.final && lc === task.col });
+      }
+      cur = { c: task.col - dir, r: R };
+
+      if (!task.final) {
+        // obejít písmeno a dostat se pod něj
+        steps.push(...walkSteps(cur, { c: task.col - dir, r: R + 1 }));
+        steps.push(...walkSteps({ c: task.col - dir, r: R + 1 }, { c: task.col, r: R + 1 }));
+        // vytlačit nahoru na pozici v nápisu
+        let lr = R, ar = R + 1;
+        while (lr !== 0) {
+          lr -= 1; ar -= 1;
+          steps.push({ t: "push", to: { c: task.col, r: ar }, letter, letterTo: { c: task.col, r: lr }, place: lr === 0 });
+        }
+        cur = { c: task.col, r: 1 };
+      }
+    }
+    return { spawn, end: cur ?? spawn, steps };
+  }
+
+  /** Jeden tik mřížky: vyřeší pohyb obou Rockfordů (levý má prioritu, druhý počká). */
+  private introTick(): void {
+    if (this.introDone) return;
+    const reserved = new Set<string>(); // buňky zabrané tento tick (priorita)
+    let active = false;
+
+    for (const a of this.actors) {
+      if (a.done) continue;
+      if (a.idx >= a.steps.length) {
+        a.done = true;
+        this.onActorFinished(a);
+        continue;
+      }
+      active = true;
+      const step = a.steps[a.idx]!;
+
+      // Zádrhel při tlačení: občas Rockford 1 tik postojí, pak se pohne.
+      if (step.t === "push" && !a.struggling && Phaser.Math.FloatBetween(0, 1) < INTRO_CFG.pushStruggleChance) {
+        a.struggling = true;
+        continue;
+      }
+      a.struggling = false;
+
+      const other = this.actors.find((x) => x !== a)!;
+      const blocked = (cell: Cell): boolean => {
+        const k = cellKey(cell);
+        if (reserved.has(k)) return true;
+        if (!other.done && sameCell(cell, other.cell)) return true;
+        if (other.letterCell && sameCell(cell, other.letterCell)) return true;
+        if (this.placed.has(k)) return true;
+        return false;
+      };
+
+      if (step.t === "move") {
+        if (blocked(step.to)) continue; // počkej (pojistka proti křížení)
+        a.cell = step.to;
+        reserved.add(cellKey(a.cell));
+        this.commitMove(a, false);
+        a.idx++;
+      } else {
+        if (blocked(step.letterTo)) continue;
+        a.cell = step.to;
+        a.letterCell = step.letterTo;
+        reserved.add(cellKey(a.cell));
+        reserved.add(cellKey(a.letterCell));
+        this.commitMove(a, true, step);
+        if (step.place) {
+          this.placed.add(cellKey(step.letterTo));
+          a.letterCell = null;
+        }
+        a.idx++;
+      }
+    }
+
+    if (!active) this.finishIntro();
+  }
+
+  /** Plynulý tween Rockforda (a tlačeného písmene) do nové buňky; nastaví směr běhu. */
+  private commitMove(a: IntroActor, push: boolean, step?: IntroStep & { t: "push" }): void {
+    const tx = this.actorX(a.cell.c);
+    const ty = this.actorY(a.cell.r);
+    const dx = tx - a.sprite.x;
+    if (dx > 0.5) { a.facing = "r"; a.sprite.play("run_r", true); }
+    else if (dx < -0.5) { a.facing = "l"; a.sprite.play("run_l", true); }
+    else a.sprite.play(a.facing === "r" ? "run_r" : "run_l", true);
+
+    const dur = Phaser.Math.Between(INTRO_CFG.stepMinMs, INTRO_CFG.stepMaxMs);
+    this.introTweens.push(this.tweens.add({ targets: a.sprite, x: tx, y: ty, duration: dur }));
+    if (push && step && a.letterCell) {
+      this.introTweens.push(
+        this.tweens.add({ targets: step.letter, x: this.letterX(a.letterCell.c), y: this.rowY(a.letterCell.r), duration: dur })
+      );
     }
   }
 
-  /** Promise obal nad tweenem jednoho kroku (registruje se kvůli přeskočení). */
-  private tweenP(targets: any, props: Record<string, any>): Promise<void> {
-    return new Promise<void>((res) => {
-      const tw = this.tweens.add({ targets, ...props, duration: STEP_MS, onComplete: () => res() });
-      this.introTweens.push(tw);
-    });
+  private onActorFinished(a: IntroActor): void {
+    a.sprite.setPosition(this.actorX(a.endCell.c), this.actorY(a.endCell.r));
+    this.idleActor(a.sprite);
   }
 
-  /** Dokončí/přeskočí úvod: duhový titulek, Rockfordi po stranách, menu se objeví. */
+  /** Vše doručeno → duhový titulek + nafejdování menu (Rockfordi zůstávají jako idle). */
+  private finishIntro(): void {
+    if (this.introDone) return;
+    this.introDone = true;
+    this.introTimer?.remove();
+    this.createRainbowTitle();
+    for (const o of this.introFade) this.tweens.add({ targets: o, alpha: 1, duration: 250 });
+  }
+
+  /** Skip klávesou: dorazí úvod do ~0,5 s – písmena na místo, Rockfordi vedle, menu. */
   private completeIntro(): void {
     if (this.introDone) return;
     this.introDone = true;
+    this.introTimer?.remove();
     for (const t of this.introTweens) t.stop();
     this.introTweens = [];
-    for (const c of this.carriers) c.destroy();
-    this.carriers = [];
 
+    // písmena doskočí na své sloupce v nápisu
+    for (const L of this.introLetters) L.obj.setPosition(this.letterX(L.col), this.rowY(0));
+    // Rockfordi na své koncové (boční) pozice + idle
+    for (const a of this.actors) {
+      a.done = true;
+      a.letterCell = null;
+      a.sprite.setPosition(this.actorX(a.endCell.c), this.actorY(a.endCell.r));
+      this.idleActor(a.sprite);
+    }
     this.createRainbowTitle();
-    this.createFlankingRockfords();
-    for (const o of this.introFade) this.tweens.add({ targets: o, alpha: 1, duration: 250 });
+    for (const o of this.introFade) this.tweens.add({ targets: o, alpha: 1, duration: INTRO_CFG.finishMs });
+  }
+
+  /** Nezávislá náhodná idle animace jednoho Rockforda (dokola). */
+  private idleActor(sprite: Phaser.GameObjects.Sprite): void {
+    const idles = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
+    const next = () => {
+      if (!sprite.active) return;
+      sprite.play(Phaser.Utils.Array.GetRandom(idles));
+      this.time.delayedCall(Phaser.Math.Between(2500, 5000), next);
+    };
+    next();
   }
 
   // ----------------------------------------------------------- DUHA
   private ensureRainbowTexture(): void {
     if (this.textures.exists("rainbow")) return;
-    const nBands = 8;
-    const bandH = 8; // vyšší pruhy (dle předlohy)
-    const wpx = 4;
-    const cycle = nBands * bandH;
+    const nBands = 8, bandH = 8, wpx = 4;
     const canvas = document.createElement("canvas");
     canvas.width = wpx;
-    canvas.height = cycle;
+    canvas.height = nBands * bandH;
     const ctx = canvas.getContext("2d")!;
     for (let bi = 0; bi < nBands; bi++) {
-      const hue = bi / nBands; // rovnoměrně po spektru, smyčka beze švu
+      const hue = bi / nBands;
       for (let yy = 0; yy < bandH; yy++) {
-        const shine = Math.sin((Math.PI * (yy + 0.5)) / bandH); // 0→1→0
-        const v = 0.22 + 0.78 * shine; // výrazný lesk (tmavé okraje, jasný střed)
+        const shine = Math.sin((Math.PI * (yy + 0.5)) / bandH);
+        const v = 0.22 + 0.78 * shine;
         const [r, g, b] = hsvToRgb(hue, 0.85, v);
         ctx.fillStyle = `rgb(${r},${g},${b})`;
         ctx.fillRect(0, bi * bandH + yy, wpx, 1);
@@ -316,22 +433,14 @@ export class WelcomeScene extends Phaser.Scene {
 
   private createRainbowTitle(): void {
     const cx = this.cameras.main.width / 2;
-    const w = TITLE.length * GLYPH_ADV;
+    const w = TITLE.length * CELL;
     const maskText = this.make
       .bitmapText({ x: cx, y: TITLE_Y, font: FONT, text: TITLE, size: TITLE_SIZE }, false)
       .setOrigin(0.5, 0);
     this.rainbow = this.add.tileSprite(cx, TITLE_Y, w, TITLE_SIZE, "rainbow").setOrigin(0.5, 0);
     this.rainbow.setMask(maskText.createBitmapMask());
-    for (const obj of this.titleLetters) obj.destroy();
-    this.titleLetters = [];
-  }
-
-  private createFlankingRockfords(): void {
-    const cx = this.cameras.main.width / 2;
-    const half = (TITLE.length * GLYPH_ADV) / 2;
-    this.rockfordLeftSprite = this.add.sprite(cx - half - 22, TITLE_Y + 12, "bd", 0).setScale(1.5);
-    this.rockfordRightSprite = this.add.sprite(cx + half + 22, TITLE_Y + 12, "bd", 0).setScale(1.5);
-    this.startIdleAnimationCycle();
+    for (const L of this.introLetters) L.obj.destroy();
+    this.introLetters = [];
   }
 
   // ----------------------------------------------------------- MENU LOGIKA
@@ -369,32 +478,12 @@ export class WelcomeScene extends Phaser.Scene {
   private createAnims() {
     const ensure = (key: string, start: number, end: number, fps: number, loop: boolean) => {
       if (this.anims.exists(key)) return;
-      this.anims.create({
-        key,
-        frames: this.anims.generateFrameNumbers("bd", { start, end }),
-        frameRate: fps,
-        repeat: loop ? -1 : 0,
-      });
+      this.anims.create({ key, frames: this.anims.generateFrameNumbers("bd", { start, end }), frameRate: fps, repeat: loop ? -1 : 0 });
     };
     ensure("iddle_anim_1", 0, 0, 1, false);
     ensure("iddle_anim_2", 0, 2, 6, true);
     ensure("iddle_anim_3", 3, 6, 6, true);
     ensure("run_l", 10, 16, 12, true);
     ensure("run_r", 20, 26, 12, true);
-  }
-
-  private startIdleAnimationCycle(): void {
-    const idleAnims = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
-    const playNextIdle = () => {
-      if (!this.rockfordLeftSprite || !this.rockfordRightSprite) return;
-      const animKey = idleAnims[this.idleAnimIndex]!;
-      this.rockfordLeftSprite.play(animKey);
-      this.rockfordRightSprite.play(animKey);
-      this.time.delayedCall(Phaser.Math.Between(3000, 5000), () => {
-        this.idleAnimIndex = (this.idleAnimIndex + 1) % idleAnims.length;
-        playNextIdle();
-      });
-    };
-    playNextIdle();
   }
 }
