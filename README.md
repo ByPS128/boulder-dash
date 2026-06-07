@@ -186,8 +186,9 @@ Každý `levels/caveNN.txt` má **40 sloupců × 22 řádků** ASCII:
   tmavý pruh pro čitelnost. Název jeskyně se ukáže jako **title card** přes plochu
   (bílé písmo s černým obrysem, fade in/out). Žádné přetékání dlouhých názvů.
 
-**Částečné / placeholder**
-- Sprity amoeby zatím přesně neodpovídají Atari předloze (k doladění).
+**Drobnosti (zatím neřešíme)**
+- Sprity amoeby: animace odpovídá originálu (ověřeno dle videí), jen barvy se
+  od Atari předlohy mírně liší — kosmetická drobnost.
 - Magic wall animuje pořád; v originále „mele" jen když je aktivní (k navázání na
   `activeUntilTick`).
 - Systém obtížnosti je připravený (`types.ts`), ale **vypnutý**
