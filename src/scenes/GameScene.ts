@@ -305,10 +305,16 @@ export class GameScene extends Phaser.Scene {
       frameRate: 6,
       repeat: -1,
     });
+    // Podupávání: stoj (0) → vykopnutí nohy (3) → stoj (0). Vždy končí na zemi.
+    // (Starý rozsah 3–6 obsahoval prázdné framy 4/9 → probliknutí a „visící" noha.)
     this.anims.create({
       key: ANIMS.IDLE3,
-      frames: this.anims.generateFrameNumbers("bd", { start: 3, end: 6 }),
-      frameRate: 6,
+      frames: [
+        { key: "bd", frame: 0 },
+        { key: "bd", frame: 3 },
+        { key: "bd", frame: 0 },
+      ],
+      frameRate: 5,
       repeat: -1,
     });
     this.anims.create({

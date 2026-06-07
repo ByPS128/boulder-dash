@@ -43,6 +43,7 @@ const INTRO_CFG = {
   spawnRowMin: 2,
   spawnRowMax: 4,
   finishMs: 400,
+  fadeMs: 500, // nafejdování zbytku scény po složení titulku
   rockfordScale: 1.5,
 };
 
@@ -66,24 +67,24 @@ interface IntroActor {
 const cellKey = (c: Cell) => `${c.c},${c.r}`;
 const sameCell = (a: Cell, b: Cell) => a.c === b.c && a.r === b.r;
 
-/** HSV → RGB (h,s,v 0–1). Pro generování duhové textury. */
-function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
-  const i = Math.floor(h * 6);
-  const f = h * 6 - i;
-  const p = v * (1 - s);
-  const q = v * (1 - f * s);
-  const t = v * (1 - (1 - f) * s);
-  let r = 0, g = 0, b = 0;
-  switch (i % 6) {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    case 5: r = v; g = p; b = q; break;
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-}
+// Barvy rolovací duhy vytažené ze svislého sloupce předlohy
+// resources/atari-dev-a-1.png (každá barva přechází světlá→tmavá, pak následuje
+// další barva). V titulku se jen svisle scrollují (raster-bar efekt jako na Atari).
+const RAINBOW_COLORS: [number, number, number][] = [
+  [172, 244, 144], [132, 204, 104], [97, 170, 70], [39, 113, 11], [10, 85, 0],
+  [159, 240, 195], [119, 201, 156], [51, 134, 88], [26, 109, 63], [0, 57, 10],
+  [163, 229, 243], [89, 155, 169], [55, 122, 136], [30, 98, 111], [0, 45, 59],
+  [0, 22, 36], [134, 178, 234], [100, 144, 200], [41, 86, 143], [13, 58, 115],
+  [0, 10, 68], [191, 205, 255], [117, 131, 221], [84, 98, 188], [59, 73, 164],
+  [6, 20, 112], [0, 1, 90], [192, 145, 255], [157, 110, 221], [100, 52, 164],
+  [72, 24, 136], [24, 0, 90], [248, 180, 255], [174, 106, 200], [141, 72, 167],
+  [117, 47, 143], [65, 0, 91], [42, 0, 68], [219, 141, 203], [185, 106, 169],
+  [128, 48, 111], [100, 19, 83], [53, 0, 36], [255, 187, 195], [189, 113, 121],
+  [157, 80, 88], [132, 55, 63], [80, 4, 10], [57, 0, 0], [222, 152, 138],
+  [188, 118, 103], [131, 60, 45], [103, 31, 16], [56, 0, 0], [250, 204, 144],
+  [176, 130, 70], [144, 97, 36], [91, 44, 0], [67, 19, 0], [211, 211, 211],
+  [137, 137, 137], [104, 104, 104], [51, 51, 51], [27, 27, 27],
+];
 
 /** Manhattan dráha mezi buňkami (po jedné buňce). Pořadí os "yx" (svisle pak vodorovně). */
 function walkSteps(from: Cell, to: Cell, order: "xy" | "yx" = "yx"): IntroStep[] {
@@ -382,7 +383,7 @@ export class WelcomeScene extends Phaser.Scene {
     this.introDone = true;
     this.introTimer?.remove();
     this.createRainbowTitle();
-    for (const o of this.introFade) this.tweens.add({ targets: o, alpha: 1, duration: 250 });
+    for (const o of this.introFade) this.tweens.add({ targets: o, alpha: 1, duration: INTRO_CFG.fadeMs });
   }
 
   /** Skip klávesou: dorazí úvod do ~0,5 s – písmena na místo, Rockfordi vedle, menu. */
@@ -408,7 +409,9 @@ export class WelcomeScene extends Phaser.Scene {
 
   /** Nezávislá náhodná idle animace jednoho Rockforda (dokola). */
   private idleActor(sprite: Phaser.GameObjects.Sprite): void {
-    const idles = ["iddle_anim_1", "iddle_anim_2", "iddle_anim_3"];
+    // Jen smyčkové animace (blink + podupávání). Jednoframové iddle_anim_1
+    // (repeat:0) po opakovaném přehrání nechávalo sprite prázdný → vynecháno.
+    const idles = ["iddle_anim_2", "iddle_anim_3"];
     const next = () => {
       if (!sprite.active) return;
       sprite.play(Phaser.Utils.Array.GetRandom(idles));
@@ -420,20 +423,15 @@ export class WelcomeScene extends Phaser.Scene {
   // ----------------------------------------------------------- DUHA
   private ensureRainbowTexture(): void {
     if (this.textures.exists("rainbow")) return;
-    const nBands = 8, bandH = 8, wpx = 4;
+    const wpx = 4;
     const canvas = document.createElement("canvas");
     canvas.width = wpx;
-    canvas.height = nBands * bandH;
+    canvas.height = RAINBOW_COLORS.length;
     const ctx = canvas.getContext("2d")!;
-    for (let bi = 0; bi < nBands; bi++) {
-      const hue = bi / nBands;
-      for (let yy = 0; yy < bandH; yy++) {
-        const shine = Math.sin((Math.PI * (yy + 0.5)) / bandH);
-        const v = 0.22 + 0.78 * shine;
-        const [r, g, b] = hsvToRgb(hue, 0.85, v);
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(0, bi * bandH + yy, wpx, 1);
-      }
+    for (let i = 0; i < RAINBOW_COLORS.length; i++) {
+      const [r, g, b] = RAINBOW_COLORS[i]!;
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(0, i, wpx, 1);
     }
     this.textures.addCanvas("rainbow", canvas);
   }
@@ -489,7 +487,21 @@ export class WelcomeScene extends Phaser.Scene {
     };
     ensure("iddle_anim_1", 0, 0, 1, false);
     ensure("iddle_anim_2", 0, 2, 6, true);
-    ensure("iddle_anim_3", 3, 6, 6, true);
+    // Podupávání nohou: zem (7) → noha nahoru (8) → zem (7). Framy 4 a 9 jsou
+    // prázdné a starý rozsah 3–6 přes ně „probliknul" + končil se zvednutou nohou.
+    if (!this.anims.exists("iddle_anim_3")) {
+      this.anims.create({
+        key: "iddle_anim_3",
+        // Podupávání: stoj (0) → vykopnutí nohy (3) → stoj (0). Vždy končí na zemi.
+        frames: [
+          { key: "bd", frame: 0 },
+          { key: "bd", frame: 3 },
+          { key: "bd", frame: 0 },
+        ],
+        frameRate: 5,
+        repeat: -1,
+      });
+    }
     ensure("run_l", 10, 16, 12, true);
     ensure("run_r", 20, 26, 12, true);
   }
