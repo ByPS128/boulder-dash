@@ -262,8 +262,15 @@ export class WelcomeScene extends Phaser.Scene {
       this.introLetters.push({ obj: letter, col: task.col });
 
       const behind: Cell = { c: S - dir, r: R };
-      if (cur === null) spawn = behind; // první písmeno: Rockford se zde rovnou objeví
-      else steps.push(...walkSteps(cur, behind));
+      if (cur === null) {
+        spawn = behind; // první písmeno: Rockford se zde rovnou objeví
+      } else {
+        // K finálnímu písmenu (B/H na řádku 0) jdeme NEJDŘÍV vodorovně (po volném
+        // řádku 1) a do řádku 0 vystoupíme až za hranou – jinak by Rockford narazil
+        // do už položeného písmene přímo nad sebou a zasekl se. K prostředním
+        // (řádek ≥2) stačí svisle dolů ("yx").
+        steps.push(...walkSteps(cur, behind, task.final ? "xy" : "yx"));
+      }
 
       // přitlačit písmeno vodorovně do cílového sloupce
       let lc = S, ac = S - dir;
