@@ -239,6 +239,26 @@ amoeba.base    #2FB36B   # amoeba zelená (zbytek scény zůstane modrý)
 - Systém obtížnosti je připravený (`types.ts`), ale **vypnutý**
   (`difficultySystemEnabled = false`).
 
+**Plánováno (TODO)**
+- **Barva HUDu podle scény** (rozšíření barevných schémat). V originále nese hlavičku
+  jeskyně i `foreground color`, kterým se barví horní řádek → chceme totéž, ať HUD ladí
+  se scénou (viz růžovo-zelená předloha). Návrh: do `levels/schemes.txt` přidat 3
+  volitelné klíče, vše s **fallbackem na dnešní default**, když schéma neuvede:
+  - `hud.fg`   – hlavní text HUDu (skóre, počet diamantů, čas v normálu) = „naladí horní řádek"
+  - `hud.ok`   – stav splněno / dost času (dnes zeleně)
+  - `hud.warn` – čas dochází (výstražná barva)
+
+  Implementace: rozšířit `Scheme` o `hud`, naparsovat v `SchemeLoader`, číst v
+  `GameScene.createUI/updateUI` (konstanty `HUD`). **Odloženo:** blikání po sebrání všech
+  diamantů; dvoustupňová výstraha času (≤60 / ≤30) – buď `hud.warn` přepíše první stupeň
+  a ≤30 zůstane systémově červená, nebo se odvodí ztmavením.
+- **Zvukový systém** – hra je zatím **úplně němá**, žádné zvuky ani hudba. Originál na
+  Atari používal čip **POKEY** (4 kanály, attack/decay obálky). K dořešení: efekty
+  (kopání hlíny, sběr diamantu, padající/dosednutý balvan, exploze, tlačení balvanu,
+  amoeba, otevření exitu, výhra/smrt, docházející čas, bonus život po 500 bodech) +
+  případně titulní/herní hudba. Zvážit autentické POKEY-like tóny vs. samply; hlasitost
+  v nastavení; respektovat pauzu (`gameTime`).
+
 **Odchylky od originální atarijské hry**
 - Jeskyně jsou **ručně kreslené ASCII mapy** s vlastními názvy ("Intro", "Rooms", …),
   **ne** originálních 16 jeskyní A–P + 4 intermission a **ne** generované Liepovým
