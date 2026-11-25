@@ -220,7 +220,7 @@ amoeba.base    #2FB36B   # amoeba zelená (zbytek scény zůstane modrý)
   pro herní náhody – tlačení balvanu (`canPush`) i růst amoeby; reprodukovatelné a
   seedované per jeskyně.
 - Herní čas (`gameTime`) místo `Date.now()` – pauza nezkresluje animace ani statistiky.
-- Ladící TEST scény na začátku menu (viz `TEST_CAVES` v `CaveLoader`).
+- Ladící TEST scény na začátku menu (viz `TEST_FILES` v `CaveLoader`).
 - **Úvodní obrazovka**: ostrý Atari bitmap font (RetroFont), carry intro (2 Rockfordi
   nanosí titulek, sokoban-tlačení), rolovací duha z předlohy; přerušitelné klávesou
   (viz sekce *Úvodní obrazovka* výše).
@@ -264,10 +264,10 @@ amoeba.base    #2FB36B   # amoeba zelená (zbytek scény zůstane modrý)
   **ne** originálních 16 jeskyní A–P + 4 intermission a **ne** generované Liepovým
   pseudonáhodným generátorem. Implementace tohoto generátoru (+ originálních
   32-bajtových hlaviček jeskyní) je největší krok k autentickému atarijskému portu.
-  Algoritmus viz CLAUDE.md.
+  Algoritmus viz `docs/historie-a-zdroje.md`.
 
 ## Poděkování a historie
 
 Boulder Dash © Peter Liepa a Chris Gray, First Star Software (1984). Původně vyvinuto
 na **Atari 800**. Toto je nekomerční fanouškovský remake. Plnou historii a referenční
-odkazy najdeš v CLAUDE.md.
+odkazy najdeš v `docs/historie-a-zdroje.md`.

@@ -232,6 +232,15 @@ Pokud vidím v MOJE odpovědi:
 
 ---
 
+## 🗣️ JAZYK (Petr, 6. 6. 2026)
+
+- **Dokumentace česky:** `README.md`, `CLAUDE.md`, `docs/`, návrhy.
+- **Komentáře v kódu česky** a u netriviální logiky je doplňuj, kde chybí.
+- **Anglicky:** texty na obrazovce (Phaser `.text(...)`, UI), logy do konzole (`console.log`, `console.error`),
+  identifikátory a commit messages.
+
+---
+
 ## 🖥️ IMPLEMENTAČNÍ REFERENCE (mimo herní pravidla)
 
 Stručný rozcestník k tomu, jak je hra technicky postavená (detaily a aktuální stav
@@ -259,8 +268,21 @@ viz `README.md`):
   Pozn.: některé framy jsou sdílené (titan = zavřený exit, born = exploze) → sdílí barvy.
 - **Definice jeskyně** (`CaveLoader.ts`): `.txt` = hlavička `klíč: hodnota`
   (name/diamonds/time/speed/scheme) + `---` + mapa 40×22. `speed` = délka herního ticku.
+  Hlavičku od mapy dělí **samostatný řádek `---`** (`l.trim() === "---"` v `CaveLoader.ts`); nikdy ji nehledej
+  jako podřetězec, cihlová zeď v mapě (`------`) ho obsahuje.
 - **In-game HUD** (`GameScene.createUI`/`updateUI`): bitmap font, vlevo ikona diamantu
   + sebráno/potřeba (zezelená po splnění), uprostřed čas (barevně), vpravo skóre
   (6 míst, origin vpravo → neskáče). Název jeskyně = **title card** přes plochu
   (`showTitleCard`): bílé písmo + černý 8-směrný obrys, fade in/hold/out (tween `hold`+`yoyo`).
-- **Ladící TEST scény** na začátku menu: čísla 101+ v `CaveLoader.ts` (`TEST_FILES`).
+- **Ladící TEST scény** na začátku menu (Petrův postup: ruční ASCII scéna s připravenou situací pro jednu mechaniku,
+  po vyladění se z menu odebere): položka `{ number, file }` v `TEST_FILES` (`CaveLoader.ts`, čísla 101+, ať
+  nekolidují s ostrými 1–20) a soubor `levels/<file>.txt` s hlavičkou a mapou 40×22 (mapu generuj skriptem, ať má
+  přesný rozměr). `getMenuOrder()` dává TEST scény před ostré, menu listuje podle něj. Odebrání = smazat položku
+  z `TEST_FILES` (soubor smí zůstat). Améba se počítá jako jeden organismus přes celou jeskyni: udušení na diamanty
+  chce uzavřenou komůrku pod 200 buněk, přerůstání na balvany přes 200, proto radši víc malých scén než jednu
+  univerzální.
+- **Vizuální ověření řízením prohlížeče** (headless Playwright se systémovým Chrome): napřed `npm run dev`
+  (http://localhost:5173/), po `goto` počkej asi 2,5 s (font, jeskyně, menu), fokus klikem do plátna, pak klávesy.
+  Chrome pouštěj s `--use-gl=angle --use-angle=swiftshader`, s nimi se WebGL plátno Phaseru ve snímku vykreslí
+  (ověřeno 6. 6. 2026). Menu začíná TEST scénami a výchozí je Cave 1, na TEST scénu se jde `ArrowLeft`.
+  `playwright-core` instaluj s `--no-save`, dočasný skript a snímky po sobě smaž.
