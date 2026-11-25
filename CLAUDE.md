@@ -8,8 +8,6 @@
 ## 📋 ZÁKLADNÍ PRAVIDLA:
 
 ### 1. ÚPLNOST A DŮSLEDNOST
-- ❌ NIKDY nepředpokládat, že "něco už funguje"
-- ✅ VŽDy EXPLICITNĚ OVĚŘIT každý detail
 - ✅ Vytvořit CHECKLIST pro každý úkol
 - ✅ CROSS-CHECK implementaci proti checklistu
 
@@ -72,7 +70,7 @@ VALIDAČNÍ CHECKLIST:
 #### DIRT:
 - Rockford může kopat
 - Zničitelná explozí
-- Amoeba může pohltit (až bude implementována)
+- Amoeba může pohltit
 
 #### WALL (Brick):
 - Zničitelná explozí
@@ -116,13 +114,13 @@ VALIDAČNÍ CHECKLIST:
 - Butterfly explosion → 9x Diamonds (nebo Empty Space při chain)
 - Chain rule: "Can contain 9 Diamonds upon being killed but not in explosions"
 
-#### AMOEBA (zatím neimplementována):
+#### AMOEBA:
 - Roste přes Empty Space a Dirt
 - Zabíjí Firefly/Butterfly při dotyku (okamžitá exploze)
 - Transformace: 200 units → Boulders, enclosed → Diamonds
 - Zničitelná explozí
 
-#### MAGIC WALL (zatím neimplementována):
+#### MAGIC WALL:
 - Konverze: Boulder ↔ Diamond
 - Aktivace při průchodu falling objektu
 - Časově omezená
@@ -179,7 +177,7 @@ PŘED odesláním návrhu user:
 □ Každé pravidlo má implementaci?
 □ Zkontroloval jsem "or" varianty (A or B or C)?
 □ Zkontroloval jsem podobné objekty (Firefly vs Butterfly)?
-□ Explicitně jsem napsal validační checklist do odpovědi?
+□ Prošel jsem validační checklist (interně; do odpovědi jen výsledek a co neprošlo)?
 ```
 
 ### KROK 4: IMPLEMENTACE
@@ -194,7 +192,6 @@ PŘED odesláním návrhu user:
 ## 🚨 RED FLAGS - OKAMŽITĚ ZASTAVIT A ZKONTROLOVAT:
 
 Pokud vidím v MOJE odpovědi:
-- ❌ "už funguje" → OVĚŘIT explicitně
 - ❌ "podobně jako X" → OVĚŘIT všechny rozdíly I podobnosti
 - ❌ "mainly" / "primárně" → Co jsem VYNECHAL?
 - ❌ Implementuji objekt, ale nezmiňuji VŠECHNY jeho death conditions
@@ -213,7 +210,7 @@ Pokud vidím v MOJE odpovědi:
 - ✅ "Implementoval jsem X včetně VŠECH pravidel: A, B, C"
 - ✅ "Zkontroloval jsem death conditions: Boulder ✓, Diamond ✓, Amoeba ✓"
 - ✅ "Butterfly má odlišnou navigaci (RIGHT), ale STEJNÉ death conditions jako Firefly"
-- ✅ Na konci odpovědi: **VALIDAČNÍ CHECKLIST**
+- ✅ **VALIDAČNÍ CHECKLIST** projdi interně; do odpovědi jen výsledek (a co neprošlo), ne celý checklist
 
 ---
 
@@ -229,191 +226,9 @@ Pokud vidím v MOJE odpovědi:
 ## 📚 ZDROJE PRAVIDEL:
 - Original game documentation: https://strategywiki.org/wiki/Boulder_Dash/Objects
 - Tento dokument je MASTER reference pro implementaci
-
----
-
-## 📖 ORIGINÁLNÍ PRAVIDLA ZE STRATEGYWIKI
-
-**Zdroj:** https://strategywiki.org/wiki/Boulder_Dash/Objects
-**Poznámka:** Toto je doslovná kopie pravidel ze StrategyWiki, aby nebylo nutné parsovat HTML online.
-
----
-
-### **Rockford (Player Character)**
-- Player-controlled character
-- Can move in 4 directions
-- Can dig Dirt
-- Can collect Diamonds
-- Can push Boulders
-- Can enter Exit to complete cave
-- Can be killed by:
-  * Falling objects
-  * Explosions
-  * Enemy contact
-
-### **Empty Space**
-- Can be occupied by characters, enemies, objects, obstacles
-
-### **Dirt**
-- Can be dug by Rockford
-- Destroyable by explosions
-- Can be overtaken by Amoeba
-
-### **Boulder**
-- Falls downward
-- Rolls off Walls, Boulders, Diamonds
-- Can be pushed by Rockford
-- Pushes randomly determined
-- Converts to Diamond through Magic Wall
-- Destroyable by explosions
-
-### **Diamond**
-- Collectible by Rockford when stationary
-- Falls downward
-- Rolls off Walls, Boulders, Diamonds
-- Converts to Boulder through Magic Wall
-- Destroyable by explosions
-
-### **Wall**
-- Destroyable by explosions
-
-### **Titanium Wall**
-- Indestructible
-
-### **Magic Wall**
-- Activates when Boulder/Diamond drops through
-- Converts Boulders and Diamonds
-- Conversions can fail if space below is occupied
-- Limited active duration
-- Destroyable by explosions
-
-### **Firefly (Enemy)**
-- Navigates clockwise
-- Pauses if no left-side empty space
-- Killed by falling Boulder/Diamond
-- Killed by Amoeba contact
-
-### **Butterfly (Enemy)**
-- Navigates counterclockwise
-- Pauses if no right-side empty space
-- Killed by falling Boulder/Diamond
-- Killed by Amoeba contact
-- **Contains 9 Diamonds when killed (except in explosions)**
-
-### **Amoeba**
-- Grows randomly in speed/direction
-- Grows over Empty Space/Dirt
-- Kills Butterflies/Fireflies on contact
-- Converts to Boulders at 200 units
-- Converts to Diamonds if growth stops
-- Destroyable by explosions
-
-### **Exit**
-- Resembles Titanium Wall initially
-- Reveals when sufficient Diamonds collected
-- Allows level completion when entered by Rockford
-
----
-
-## 🔑 KLÍČOVÉ DETAILY Z PRAVIDEL:
-
-### Falling Objects (Boulder & Diamond):
-- **"Falls downward"** - oba objekty padají
-- **"Rolls off Walls, Boulders, Diamonds"** - oba objekty sjíždí z těchto povrchů
-- Boulder i Diamond jsou **deadly when falling**
-
-### Enemy Death Conditions:
-- **"Killed by falling Boulder/Diamond"** - je to "**Boulder OR Diamond**", ne jen Boulder!
-- **"Killed by Amoeba contact"** - dotyk s Amoebou
-- Firefly: standardní exploze (Empty Space)
-- Butterfly: **"Contains 9 Diamonds when killed (except in explosions)"**
-  - Direct kill → 9 diamonds
-  - Chain explosion → no diamonds
-
-### Magic Wall:
-- **"Converts Boulders and Diamonds"** - obousměrná konverze
-- **"Conversions can fail if space below is occupied"** - musí být místo pod zdí
-- **"Limited active duration"** - časově omezená
-
-### Amoeba:
-- **"Converts to Boulders at 200 units"** - při velkém růstu
-- **"Converts to Diamonds if growth stops"** - když je obklopena
-- **"Kills Butterflies/Fireflies on contact"** - okamžitá smrt nepřátel
-
----
-
-## 🕹️ HISTORIE, ATARI VERZE A ZDROJOVÉ KÓDY
-
-**Zdroj:** webový výzkum (Wikipedia, boulder-dash.nl interview s Liepou, First Star
-Software, VGMPF, Retrointernals, elmerproductions). Flagy nejistoty jsou označeny.
-
-### PŮVOD HRY — Boulder Dash je PŮVODNĚ ATARIJSKÁ HRA
-- **Peter Liepa** napsal v **roce 1983 první Boulder Dash na Atari 800** (spolu
-  s **Chrisem Grayem**). Nejdřív prototyp ve **Forthu** (~6 měsíců), pak přepis do
-  **6502 assembleru** kvůli výkonu.
-- Liepa vlastními slovy: *"I designed all of the elements, physics, caves, the game
-  play, the graphics, the music, and the title. Chris helped out with a few odds and
-  ends."*
-- Vydal **First Star Software**, práva koupili **28. 10. 1983**. Vydáno **březen 1984**
-  (NTSC). **C64 verze až duben 1984** — tedy PORT, ne originál.
-- ⚠️ **DŮLEŽITÉ pro tento projekt:** Všechny dostupné disassembly (včetně dvou souborů
-  v rootu repa) jsou **C64**, tedy derivát atarijského originálu. Logika je sdílená,
-  ale nejde o atarijský kód.
-
-### ATARI 8-BIT TECHNICKÉ DETAILY
-- **ANTIC + GTIA**: smooth fine-scrolling (BD je učebnicová ukázka). Liepa
-  **zdvojnásobil dlaždice na 16×16** a scrolloval, místo zmenšování jeskyní → proto
-  je v naší hře `TILE = 16` historicky správně.
-- **POKEY** (zvuk): 4 kanály, attack/decay obálky, bonus život po 500 bodech
-  (na Atari s 2s "shimmer" efektem).
-- Originální zobrazení Liepa popisuje jako 24×40 znaků bez scrollingu, později
-  rozšířeno na větší scrollující jeskyně.
-- ⚠️ Přesný ANTIC mód a registry barev atarijské verze se z primárního zdroje
-  potvrdit NEPODAŘILO. Frame/tick rate atarijské verze rovněž NEPOTVRZEN.
-
-### STRUKTURA JESKYNÍ V ORIGINÁLU
-- **16 hlavních jeskyní A–P** + **4 hratelné intermission/bonus jeskyně** (po jeskyních
-  D, H, L, P → bonus Rockford). Celkem 20 slotů.
-- **5 obtížností (sublevelů)** na jeskyni; vyšší obtížnost = méně času + víc diamantů.
-- ⚠️ NÁŠ PROJEKT toto NEMÁ: jeskyně jsou ručně kreslené ASCII s vymyšlenými názvy,
-  ne A–P, ne generátor.
-
-### 🎲 PSEUDONÁHODNÝ GENERÁTOR JESKYNÍ (Liepův klíčový trik)
-Celá jeskyně = pár desítek bajtů. Dvě vrstvy:
-1. **Náhodná výplň** — deterministický PRNG mapuje každou buňku na 1 ze 4 objektů
-   podle 4 pravděpodobnostních bajtů (typicky Space/Dirt/Boulder/Diamond).
-2. **Kreslené objekty navrch** — seznam příkazů (`ccoooooo`, horní 2 bity = příkaz):
-   - `$00` **Single(x,y)** — bod
-   - `$40` **Line(x,y,len,dir)** — dir: N=0,NE=1,E=2,SE=3,S=4,SW=5,W=6,NW=7
-   - `$80` **FilledRect(x,y,w,h,interiér)** — obrys + výplň
-   - `$c0` **Rect(x,y,w,h)** — dutý obdélník
-   - seznam končí `$ff`
-
-**PRNG (`PseudoRandom`, $6ced v C64 disassembly):** dva seed bajty `RandSeed1`/
-`RandSeed2`, čistá aritmetika (operace `ROR`/`AND $80`/`AND $7f`), slavná konstanta
-**`+$13`**. Vygenerovaný bajt se porovná proti 4 pravděpodobnostním bajtům.
-Každá z 5 obtížností má **vlastní počáteční seed** → stejná jeskyně, jiný layout.
-
-**32-bajtová hlavička jeskyně:** CaveNumber, MagicWallTime/Amoeba-max,
-InitialDiamondValue, ExtraDiamondValue, 5× seed, 5× DiamondsNeeded, 5× CaveTime,
-2× background color, foreground color, 2× neznámé, 4× RandomObjectNumber,
-4× ProbabilityOfObject.
-
-### ZDROJOVÉ KÓDY — DOSTUPNOST
-- **Originální atarijský 6502 zdroják NENÍ veřejný.** First Star drží práva, nikdo
-  (ani Liepa) ho nevydal.
-- **Neexistuje ani dedikovaný atarijský disassembly** (ověřeno i v kurátorovaném
-  seznamu `realdmx/retrore` — BD tam není).
-- **Dostupné reference (vše C64, logika sdílená s Atari designem):**
-  - Retrointernals C64 disassembly: https://www.retrointernals.org/boulder-dash/boulder-dash-disassembly.html
-    (zdroj souboru `Boulder Dash Disassembly - Retrointernals.mhtml` v rootu)
-  - Repo soubor `Boulderdash-C64-commented-disassembly.asm` — byte-exact `PseudoRandom`,
-    32-bajtová hlavička, draw příkazy (NEJBOHATŠÍ technická reference, kterou máme)
-  - "Inside Boulder Dash" (Peter Broadribb) — RNG + dekodér + BDCFF spec + decodecaves.c:
-    https://www.elmerproductions.com/sp/peterb/insideBoulderdash.html
-  - Liepa interview (potvrzuje atarijský původ): https://www.boulder-dash.nl/
-  - Jake Gordon — JS reimplementace z C64 cave dat:
-    https://jakesgordon.com/writing/javascript-boulderdash/ a .../boulderdash-cave-data/
+- Doslovná kopie pravidel ze StrategyWiki a jejich rozbor: [`docs/strategywiki-objects.md`](docs/strategywiki-objects.md)
+- Historie hry, Atari verze, generátor jeskyní (PRNG) a dostupné zdrojové kódy:
+  [`docs/historie-a-zdroje.md`](docs/historie-a-zdroje.md)
 
 ---
 
@@ -432,12 +247,12 @@ viz `README.md`):
   (každá světlá→tmavá), maska = tvar písmen, scroll `tilePositionY`. Historická
   předloha (DLI raster bars) je v `atari.md`.
 - **Deterministický PRNG** (`src/core/Rng.ts`): věrný překlad rutiny `PseudoRandom`
-  (viz výše); používá se pro `canPush` a růst amoeby, seedovaný per jeskyně.
-- **Spritesheet framy** (`sprites_source.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
+  (viz `docs/historie-a-zdroje.md`); používá se pro `canPush` a růst amoeby, seedovaný per jeskyně.
+- **Spritesheet framy** (`resources/sprites_source.png`, 10×13): idle 0–2 (blink) a 3 (podupnutí,
   noha vždy končí na zemi); framy 4/9 jsou PRÁZDNÉ (nepoužívat); magic wall 50–53,
   amoeba 60–63, firefly 80, butterfly 90, explosion 100.
 - **Barevná schémata jeskyní** (`src/core/SpritePalette.ts` + `levels/schemes.txt`):
-  `sprites_source.png` je ŠABLONA (6-barevný indexovaný list = „sloty" base/shadow/hi/
+  `resources/sprites_source.png` je ŠABLONA (6-barevný indexovaný list = „sloty" base/shadow/hi/
   accent/ink, index 0 průhledný). Schéma nastaví barvy slotů GLOBÁLNĚ i PER ENTITA
   (`diamond.base #...`). Za běhu se ze šablony vyrobí obarvená RGBA textura "bd"
   (frame→entita podle `ENTITY_FRAMES`), cache per schéma. Sprity/anim dál používají "bd".
@@ -449,11 +264,3 @@ viz `README.md`):
   (6 míst, origin vpravo → neskáče). Název jeskyně = **title card** přes plochu
   (`showTitleCard`): bílé písmo + černý 8-směrný obrys, fade in/hold/out (tween `hold`+`yoyo`).
 - **Ladící TEST scény** na začátku menu: čísla 101+ v `CaveLoader.ts` (`TEST_FILES`).
-
----
-
-**POSLEDNÍ KONTROLNÍ OTÁZKA PŘED KAŽDOU ODPOVĚDÍ:**
-"Přečetl jsem si .ai-rules.md a postupoval podle něj?"
-
-**ANO → pokračuj**
-**NE → STOP, přečti .ai-rules.md a začni znovu**
